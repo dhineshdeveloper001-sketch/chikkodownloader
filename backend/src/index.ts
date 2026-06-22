@@ -45,6 +45,15 @@ app.get('/media/:filename', (req, res) => {
   res.status(403).json({ error: 'Direct file access is forbidden. Please use the secure download proxy.' });
 });
 
+// Serve frontend static files
+const frontendPath = path.join(__dirname, '../../frontend/dist');
+app.use(express.static(frontendPath));
+
+// Catch-all route to serve React app for client-side routing
+app.get('*', (req, res) => {
+  res.sendFile(path.join(frontendPath, 'index.html'));
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
