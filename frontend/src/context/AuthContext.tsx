@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import axios from 'axios';
+import { API_BASE } from '../config';
 
 interface User {
   id: string;
@@ -25,7 +26,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      axios.get('http://localhost:5000/api/auth/me')
+      axios.get(`${API_BASE}/api/auth/me')
         .then(res => {
           setUser(res.data.user);
         })

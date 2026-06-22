@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
+import { API_BASE } from '../config';
 import { Link, useNavigate } from 'react-router-dom';
 import { DownloadCloud, Mail, Lock, User, Loader2, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -18,7 +19,7 @@ const Register = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await axios.post('http://localhost:5000/api/auth/register', { name, email, password });
+      const res = await axios.post(`${API_BASE}/api/auth/register`, { name, email, password });
       login(res.data.token, res.data.user);
       navigate('/');
       toast.success('Registration successful! Welcome to Chikko Downloader.');

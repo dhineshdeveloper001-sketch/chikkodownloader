@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Search, File, Download, Calendar, HardDrive, ArrowRight, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import clsx from 'clsx';
+import { API_BASE } from '../config';
 
 const formatBytes = (bytes: number | string, decimals = 2) => {
   const numBytes = Number(bytes);
@@ -25,8 +26,8 @@ const History = () => {
   const fetchHistory = async (cursor?: string) => {
     try {
       const url = cursor 
-        ? `http://localhost:5000/api/stats/history?limit=20&cursor=${cursor}`
-        : `http://localhost:5000/api/stats/history?limit=20`;
+        ? `${API_BASE}/api/stats/history?limit=20&cursor=${cursor}`
+        : `${API_BASE}/api/stats/history?limit=20`;
         
       const res = await axios.get(url);
       
@@ -131,7 +132,7 @@ const History = () => {
 
               {item.status === 'completed' ? (
                 <a 
-                  href={`http://localhost:5000/api/media/serve/${item.id}?token=${token}`} 
+                  href={`${API_BASE}/api/media/serve/${item.id}?token=${token}`} 
                   download 
                   target="_blank"
                   rel="noreferrer"

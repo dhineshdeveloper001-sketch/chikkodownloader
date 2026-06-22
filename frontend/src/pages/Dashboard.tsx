@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { DownloadCloud, HardDrive, FileType, Calendar, Loader2, Activity } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE } from '../config';
 
 const formatBytes = (bytes: number | string, decimals = 2) => {
   const numBytes = Number(bytes);
@@ -21,7 +22,7 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await axios.get('http://localhost:5000/api/stats/dashboard');
+        const res = await axios.get(`${API_BASE}/api/stats/dashboard');
         setStats(res.data);
       } catch (err) {
         console.error('Failed to fetch stats');

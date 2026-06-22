@@ -4,6 +4,7 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import { Users, Download, Activity, Trash2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import clsx from 'clsx';
+import { API_BASE } from '../config';
 
 const Admin = () => {
   const { token } = useAuth();
@@ -24,16 +25,16 @@ const Admin = () => {
     try {
       const headers = { Authorization: `Bearer ${token}` };
       if (activeTab === 'overview') {
-        const res = await axios.get('http://localhost:5000/api/admin/overview', { headers });
+        const res = await axios.get(`${API_BASE}/api/admin/overview', { headers });
         setStats(res.data);
       } else if (activeTab === 'users') {
-        const res = await axios.get('http://localhost:5000/api/admin/users', { headers });
+        const res = await axios.get(`${API_BASE}/api/admin/users', { headers });
         setUsers(res.data.users);
       } else if (activeTab === 'downloads') {
-        const res = await axios.get('http://localhost:5000/api/admin/downloads', { headers });
+        const res = await axios.get(`${API_BASE}/api/admin/downloads', { headers });
         setDownloads(res.data.downloads);
       } else if (activeTab === 'audits') {
-        const res = await axios.get('http://localhost:5000/api/admin/audits', { headers });
+        const res = await axios.get(`${API_BASE}/api/admin/audits', { headers });
         setAudits(res.data.logs);
       }
     } catch (err: any) {
@@ -46,7 +47,7 @@ const Admin = () => {
   const deleteUser = async (id: string) => {
     if (!window.confirm('Are you sure? This will delete the user and all their downloads.')) return;
     try {
-      await axios.delete(`http://localhost:5000/api/admin/users/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.delete(`${API_BASE}/api/admin/users/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       toast.success('User deleted');
       fetchData();
     } catch (err: any) {
@@ -57,7 +58,7 @@ const Admin = () => {
   const deleteDownload = async (id: string) => {
     if (!window.confirm('Are you sure? This will delete the download log and the physical file.')) return;
     try {
-      await axios.delete(`http://localhost:5000/api/admin/downloads/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.delete(`${API_BASE}/api/admin/downloads/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       toast.success('Download deleted');
       fetchData();
     } catch (err: any) {
@@ -67,7 +68,7 @@ const Admin = () => {
 
   const deleteAudit = async (id: string) => {
     try {
-      await axios.delete(`http://localhost:5000/api/admin/audits/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.delete(`${API_BASE}/api/admin/audits/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       toast.success('Audit log deleted');
       fetchData();
     } catch (err: any) {
@@ -78,7 +79,7 @@ const Admin = () => {
   const clearAudits = async () => {
     if (!window.confirm('Are you sure you want to clear ALL audit logs?')) return;
     try {
-      await axios.delete(`http://localhost:5000/api/admin/audits`, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.delete(`${API_BASE}/api/admin/audits`, { headers: { Authorization: `Bearer ${token}` } });
       toast.success('All audit logs cleared');
       fetchData();
     } catch (err: any) {

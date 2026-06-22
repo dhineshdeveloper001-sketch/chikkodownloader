@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
+import { API_BASE } from '../config';
 import { Link, useNavigate } from 'react-router-dom';
 import { DownloadCloud, Mail, Lock, Loader2, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -17,7 +18,7 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await axios.post('http://localhost:5000/api/auth/login', { email, password });
+      const res = await axios.post(`${API_BASE}/api/auth/login`, { email, password });
       login(res.data.token, res.data.user);
       navigate('/');
     } catch (err: any) {

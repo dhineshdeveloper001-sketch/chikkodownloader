@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Search, Loader2, Download, Video, Music, PlayCircle, CheckCircle } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
+import { API_BASE } from '../config';
 
 const formatBytes = (bytes: number | string, decimals = 2) => {
   const numBytes = Number(bytes);
@@ -76,7 +77,7 @@ const Downloader = () => {
     setLoading(true);
     setMetadata(null);
     try {
-      const res = await axios.post('http://localhost:5000/api/media/metadata', { url });
+      const res = await axios.post(`${API_BASE}/api/media/metadata', { url });
       setMetadata(res.data);
       if (res.data.formats && res.data.formats.video?.length === 0 && res.data.formats.audio?.length > 0) {
         setActiveTab('audio');
@@ -98,7 +99,7 @@ const Downloader = () => {
     setProgresses(prev => ({ ...prev, [downloadKey]: { status: 'starting', percent: 0 } }));
 
     try {
-      const res = await axios.post('http://localhost:5000/api/media/download', {
+      const res = await axios.post(`${API_BASE}/api/media/download', {
         url: metadata.url,
         filename: metadata.filename,
         size: metadata.size,
@@ -109,7 +110,7 @@ const Downloader = () => {
       });
       
       const { id } = res.data;
-      const eventSource = new EventSource(`http://localhost:5000/api/media/progress/${id}?token=${token}`);
+      const eventSource = new EventSource(`${API_BASE}/api/media/progress/${id}?token=${token}`);
       
       eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -120,7 +121,7 @@ const Downloader = () => {
           toast.success('Download completed!');
 
           // Trigger actual browser download
-          const fileUrl = `http://localhost:5000/api/media/serve/${id}?token=${token}`;
+          const fileUrl = `${API_BASE}/api/media/serve/${id}?token=${token}`;
           const a = document.createElement('a');
           a.href = fileUrl;
           a.download = ''; 
