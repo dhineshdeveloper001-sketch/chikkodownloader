@@ -77,7 +77,7 @@ const Downloader = () => {
     setLoading(true);
     setMetadata(null);
     try {
-      const res = await axios.post(`${API_BASE}/api/media/metadata', { url });
+      const res = await axios.post(`${API_BASE}/api/media/metadata`, { url });
       setMetadata(res.data);
       if (res.data.formats && res.data.formats.video?.length === 0 && res.data.formats.audio?.length > 0) {
         setActiveTab('audio');
@@ -99,7 +99,7 @@ const Downloader = () => {
     setProgresses(prev => ({ ...prev, [downloadKey]: { status: 'starting', percent: 0 } }));
 
     try {
-      const res = await axios.post(`${API_BASE}/api/media/download', {
+      const res = await axios.post(`${API_BASE}/api/media/download`, {
         url: metadata.url,
         filename: metadata.filename,
         size: metadata.size,

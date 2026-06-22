@@ -25,16 +25,16 @@ const Admin = () => {
     try {
       const headers = { Authorization: `Bearer ${token}` };
       if (activeTab === 'overview') {
-        const res = await axios.get(`${API_BASE}/api/admin/overview', { headers });
+        const res = await axios.get(`${API_BASE}/api/admin/overview`, { headers });
         setStats(res.data);
       } else if (activeTab === 'users') {
-        const res = await axios.get(`${API_BASE}/api/admin/users', { headers });
+        const res = await axios.get(`${API_BASE}/api/admin/users`, { headers });
         setUsers(res.data.users);
       } else if (activeTab === 'downloads') {
-        const res = await axios.get(`${API_BASE}/api/admin/downloads', { headers });
+        const res = await axios.get(`${API_BASE}/api/admin/downloads`, { headers });
         setDownloads(res.data.downloads);
       } else if (activeTab === 'audits') {
-        const res = await axios.get(`${API_BASE}/api/admin/audits', { headers });
+        const res = await axios.get(`${API_BASE}/api/admin/audits`, { headers });
         setAudits(res.data.logs);
       }
     } catch (err: any) {

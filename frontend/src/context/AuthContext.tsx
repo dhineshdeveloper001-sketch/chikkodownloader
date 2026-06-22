@@ -6,6 +6,7 @@ interface User {
   id: string;
   name: string;
   email: string;
+  role: string;
 }
 
 interface AuthContextType {
@@ -26,7 +27,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      axios.get(`${API_BASE}/api/auth/me')
+      axios.get(`${API_BASE}/api/auth/me`)
         .then(res => {
           setUser(res.data.user);
         })
