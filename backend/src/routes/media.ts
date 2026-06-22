@@ -2,7 +2,9 @@ import { Router } from 'express';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
-import youtubedl from 'youtube-dl-exec';
+import { execFile, spawn } from 'child_process';
+import util from 'util';
+const execFileAsync = util.promisify(execFile);
 const ffmpegPath = require('ffmpeg-static');
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
@@ -41,10 +43,8 @@ router.post('/metadata', authenticate, validate(mediaMetadataSchema), preventSSR
 
     if (contentType.includes('text/html') || !response) {
       try {
-        const info = await youtubedl(url, {
-          dumpSingleJson: true,
-          noWarnings: true
-        }) as any;
+        const { stdout } = await execFileAsync('yt-dlp', ['--dump-single-json', '--no-warnings', url], { maxBuffer: 20 * 1024 * 1024 });
+        const info = JSON.parse(stdout) as any;
 
         const formats = info.formats || [];
         const videoFormatsMap = new Map();
@@ -210,17 +210,31 @@ router.post('/download', authenticate, downloadLimiter, validate(mediaDownloadSc
     if (isYtDlp) {
       const ytFormat = formatId ? (downloadType === 'video' ? `${formatId}+bestaudio/best` : formatId) : 'best';
       
-      const subprocess = youtubedl.exec(url, {
-        output: `"${filePath}"`,
-        format: ytFormat,
-        ffmpegLocation: `"${ffmpegPath}"`,
-        mergeOutputFormat: 'mp4',
-        newline: true
-      });
+      const ytArgs = [
+        '--output', filePath,
+        '--format', ytFormat,
+        '--ffmpeg-location', ffmpegPath,
+        '--merge-output-format', 'mp4',
+        '--newline',
+        url
+      ];
+      
+      const subprocess = spawn('yt-dlp', ytArgs);
 
-      subprocess.then(async () => {
+      subprocess.on('close', async (code) => {
+        if (code !== 0) {
+          activeRecord.status = 'error';
+          await prisma.download.update({ where: { id: downloadRecord.id }, data: { status: 'error' } });
+          setTimeout(() => activeDownloads.delete(downloadRecord.id), 2000);
+          return;
+        }
+
         if (!fs.existsSync(filePath)) {
-          throw new Error('yt-dlp finished but output file is missing (likely an ffmpeg merge failure)');
+          console.error('yt-dlp finished but output file is missing (likely an ffmpeg merge failure)');
+          activeRecord.status = 'error';
+          await prisma.download.update({ where: { id: downloadRecord.id }, data: { status: 'error' } });
+          setTimeout(() => activeDownloads.delete(downloadRecord.id), 2000);
+          return;
         }
         
         if (!activeRecord.size) {
@@ -231,19 +245,19 @@ router.post('/download', authenticate, downloadLimiter, validate(mediaDownloadSc
           });
         }
         await finalizeDownload();
-      }).catch((err) => {
-        console.error('yt-dlp Execution Error:', err.message || err);
+      });
+
+      subprocess.on('error', (err) => {
+        console.error('yt-dlp Spawn Error:', err.message || err);
         activeRecord.status = 'error';
         prisma.download.update({
           where: { id: downloadRecord.id },
           data: { status: 'error' }
         }).catch(console.error);
-        
-        // Wait briefly so frontend receives the error state before deletion
         setTimeout(() => activeDownloads.delete(downloadRecord.id), 2000);
       });
 
-      subprocess.stdout?.on('data', (chunk: any) => {
+      subprocess.stdout.on('data', (chunk: any) => {
         const text = chunk.toString();
         const percentMatch = text.match(/\[download\]\s+([\d.]+)%/);
         if (percentMatch) {
@@ -253,7 +267,7 @@ router.post('/download', authenticate, downloadLimiter, validate(mediaDownloadSc
         }
       });
 
-      subprocess.stderr?.on('data', (data) => {
+      subprocess.stderr.on('data', (data: any) => {
         console.log('yt-dlp stderr:', data.toString());
       });
 
