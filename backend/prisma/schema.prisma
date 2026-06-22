@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String     @id @default(uuid())
+  name          String
+  email         String     @unique
+  password_hash String
+  role          String     @default("user") // "user" or "admin"
+  created_at    DateTime   @default(now())
+  downloads     Download[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Download {
+  id            String   @id @default(uuid())
+  user_id       String
+  original_url  String
+  file_name     String
+  file_type     String
+  file_size     BigInt
+  download_date DateTime @default(now())
+  status        String   @default("completed") // "downloading", "completed", "error"
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([download_date(sort: Desc)])
+  @@map("downloads")
+}
+
+model DownloadStat {
+  id                 String   @id @default(uuid())
+  total_downloads    Int      @default(0)
+  total_storage_used BigInt   @default(0)
+  updated_at         DateTime @updatedAt
+
+  @@map("download_stats")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  user_id    String?  // nullable for anonymous/system actions
+  action     String   // e.g. "LOGIN", "REGISTER", "DOWNLOAD_START"
+  details    String?  // JSON string or simple text describing the action
+  created_at DateTime @default(now())
+
+  user       User?    @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id])
+  @@index([created_at(sort: Desc)])
+  @@map("audit_logs")
+}

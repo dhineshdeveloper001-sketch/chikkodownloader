@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamDrop | Ultimate Downloader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+            background-attachment: fixed;
+            min-height: 100vh;
+        }
+        .glass {
+            background: rgba(15, 23, 42, 0.82);
+            backdrop-filter: blur(24px);
+            border: 1px solid rgba(14, 165, 233, 0.2);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+        }
+        .quality-card {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            background: rgba(30, 41, 59, 0.3);
+        }
+        .quality-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            background: rgba(30, 41, 59, 0.9);
+            border-color: rgba(14, 165, 233, 0.5);
+            box-shadow: 0 15px 30px -10px rgba(14, 165, 233, 0.4);
+        }
+        .ultra-res {
+            background: linear-gradient(135deg, rgba(234, 179, 8, 0.12) 0%, rgba(234, 179, 8, 0.05) 100%);
+            border: 1px solid rgba(234, 179, 8, 0.25);
+        }
+        .ultra-res:hover {
+            border-color: rgba(234, 179, 8, 0.7);
+            box-shadow: 0 15px 30px -10px rgba(234, 179, 8, 0.4);
+        }
+        .badge-8k { background: linear-gradient(90deg, #f59e0b, #ef4444); color: white; }
+        .badge-4k { background: linear-gradient(90deg, #10b981, #3b82f6); color: white; }
+        .badge-pro { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+        .gradient-text {
+            background: linear-gradient(90deg, #38bdf8, #2dd4bf);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .loading-shimmer {
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        
+        /* Optional: Hide scrollbar for clean internal scrolling */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1); 
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2); 
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="text-white p-4">
+
+    <div class="max-w-2xl mx-auto mt-10 md:mt-20 px-4">
+        <div class="text-center mb-10">
+            <h1 class="text-5xl font-extrabold tracking-tighter mb-3">
+                <i class="fa-solid fa-cloud-arrow-down mr-3 gradient-text"></i>StreamDrop
+            </h1>
+            <p class="text-slate-400 text-base font-medium">Professional. Secure. High Performance.</p>
+        </div>
+
+        <div class="glass rounded-[2rem] p-8 shadow-2xl mb-12">
+            <form action="/analyze" method="post" class="space-y-4" id="downloadForm">
+                <div class="relative">
+                    <input type="text" name="url" placeholder="Paste media link here..." 
+                        class="w-full bg-slate-950/40 border border-slate-800 rounded-2xl py-5 px-6 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-lg shadow-inner" required>
+                </div>
+                <button type="submit" id="submitBtn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-5 rounded-2xl shadow-xl transition-all active:scale-[0.98] flex items-center justify-center gap-3 text-lg">
+                    <span id="btnText"><i class="fa-solid fa-bolt"></i> Fast Analyze</span>
+                    <span id="btnLoader" class="hidden loading-shimmer px-6 py-2 rounded-xl text-white">Extracting Quality...</span>
+                </button>
+            </form>
+        </div>
+
+        {% if info %}
+        <div class="glass rounded-[2rem] overflow-hidden animate-in fade-in slide-in-from-bottom-8 duration-700">
+            <div class="md:flex">
+                <div class="md:w-1/3 relative">
+                    <img src="{{ info.thumbnail }}" class="w-full h-full object-cover min-h-[220px]" alt="Thumbnail">
+                    <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent"></div>
+                </div>
+                <div class="p-8 md:w-2/3">
+                    <h2 class="text-xl font-bold line-clamp-2 mb-8 leading-tight">{{ info.title }}</h2>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[420px] overflow-y-auto pr-3 custom-scrollbar">
+                        {% for f in formats %}
+                        {% set is_ultra = f.res in ['2K', '4K', '8K'] %}
+                        <a href="{{ f.url }}" rel="noreferrer" download 
+                            class="quality-card group flex flex-col p-5 rounded-2xl {{ 'ultra-res' if is_ultra else '' }}">
+                            <div class="flex justify-between items-start mb-3">
+                                <span class="text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-tighter {{ 'badge-8k' if f.res == '8K' else ('badge-4k' if f.res == '4K' else 'badge-pro') }}">
+                                    {{ f.res }}
+                                </span>
+                                <i class="fa-solid fa-circle-arrow-down text-slate-700 group-hover:text-blue-400 text-xl transition-colors"></i>
+                            </div>
+                            <div class="flex items-end justify-between">
+                                <div>
+                                    <p class="text-[10px] text-slate-500 uppercase font-black tracking-widest">{{ f.ext }}</p>
+                                    <p class="text-[9px] text-slate-400 font-medium">Direct Proxy Extract</p>
+                                </div>
+                                <span class="text-[11px] font-bold text-blue-500/40 group-hover:text-blue-400 uppercase tracking-tighter">Get Link</span>
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <footer class="mt-10 text-center text-slate-500 text-xs flex flex-col gap-1">
+            <p>Project Purpose Only • Anti-Gravity Research © 2026</p>
+        </footer>
+    </div>
+    
+    <script>
+        // Simple loading state for the submit button
+        document.getElementById('downloadForm').addEventListener('submit', function() {
+            var btnText = document.getElementById('btnText');
+            var btnLoader = document.getElementById('btnLoader');
+            var submitBtn = document.getElementById('submitBtn');
+            
+            btnText.classList.add('hidden');
+            btnLoader.classList.remove('hidden');
+            submitBtn.classList.add('opacity-75', 'cursor-not-allowed');
+            submitBtn.style.pointerEvents = 'none';
+        });
+    </script>
+
+</body>
+</html>
