@@ -27,6 +27,7 @@ if (!fs.existsSync(DOWNLOADS_DIR)) {
 
 let ytDlpCmd = 'yt-dlp';
 const possiblePaths = [
+  path.join(process.cwd(), 'yt-dlp'),
   process.env.HOME ? path.join(process.env.HOME, '.local/bin/yt-dlp') : null,
   '/opt/render/project/src/.venv/bin/yt-dlp',
   '/opt/render/project/.local/bin/yt-dlp'
