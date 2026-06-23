@@ -25,6 +25,11 @@ if (!fs.existsSync(DOWNLOADS_DIR)) {
   fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
 }
 
+let ytDlpCmd = 'yt-dlp';
+if (process.env.HOME && fs.existsSync(path.join(process.env.HOME, '.local/bin/yt-dlp'))) {
+  ytDlpCmd = path.join(process.env.HOME, '.local/bin/yt-dlp');
+}
+
 const activeDownloads = new Map();
 
 // Legacy simple URL validator can be removed, Zod handles it.
@@ -43,7 +48,7 @@ router.post('/metadata', authenticate, validate(mediaMetadataSchema), preventSSR
 
     if (contentType.includes('text/html') || !response) {
       try {
-        const { stdout } = await execFileAsync('yt-dlp', ['--dump-single-json', '--no-warnings', url], { maxBuffer: 20 * 1024 * 1024 });
+        const { stdout } = await execFileAsync(ytDlpCmd, ['--dump-single-json', '--no-warnings', url], { maxBuffer: 20 * 1024 * 1024 });
         const info = JSON.parse(stdout) as any;
 
         const formats = info.formats || [];
@@ -219,7 +224,7 @@ router.post('/download', authenticate, downloadLimiter, validate(mediaDownloadSc
         url
       ];
       
-      const subprocess = spawn('yt-dlp', ytArgs);
+      const subprocess = spawn(ytDlpCmd, ytArgs);
 
       subprocess.on('close', async (code) => {
         if (code !== 0) {
