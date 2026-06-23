@@ -26,9 +26,19 @@ if (!fs.existsSync(DOWNLOADS_DIR)) {
 }
 
 let ytDlpCmd = 'yt-dlp';
-if (process.env.HOME && fs.existsSync(path.join(process.env.HOME, '.local/bin/yt-dlp'))) {
-  ytDlpCmd = path.join(process.env.HOME, '.local/bin/yt-dlp');
+const possiblePaths = [
+  process.env.HOME ? path.join(process.env.HOME, '.local/bin/yt-dlp') : null,
+  '/opt/render/project/src/.venv/bin/yt-dlp',
+  '/opt/render/project/.local/bin/yt-dlp'
+].filter(Boolean) as string[];
+
+for (const p of possiblePaths) {
+  if (fs.existsSync(p)) {
+    ytDlpCmd = p;
+    break;
+  }
 }
+console.log(`[Startup] Resolved yt-dlp command to: ${ytDlpCmd}`);
 
 const activeDownloads = new Map();
 
@@ -106,6 +116,7 @@ router.post('/metadata', authenticate, validate(mediaMetadataSchema), preventSSR
         thumbnail = info.thumbnail || null;
         isYtDlp = true;
       } catch (ytErr: any) {
+        console.error('[Metadata Error] yt-dlp execution failed:', ytErr);
         return res.status(400).json({ error: ytErr.message || 'Unsupported media URL or video unavailable.' });
       }
     } else {
