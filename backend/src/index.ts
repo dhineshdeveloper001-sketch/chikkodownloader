@@ -9,9 +9,10 @@ import statsRoutes from './routes/stats';
 import adminRoutes from './routes/admin';
 import healthRoutes from './routes/health';
 import path from 'path';
-import { ytDlpWorker } from './workers/YtDlpWorker';
+import { startWorker, closeWorker } from './workers/YtDlpWorker';
 import prisma from './prisma';
-import { cacheRedisClient } from './services/CacheService';
+import { redisClient } from './config/redis';
+import { MetadataOrchestrator } from './services/MetadataOrchestrator';
 import { ytDlpCmd } from './services/YtDlpService';
 import { execFile } from 'child_process';
 import util from 'util';
@@ -68,16 +69,21 @@ app.get('/health', async (req, res) => {
     // Check DB
     await prisma.$queryRaw`SELECT 1`;
     // Check Redis
-    const ping = await cacheRedisClient.ping();
+    const ping = await redisClient.ping();
     if (ping !== 'PONG') throw new Error('Redis ping failed');
     // Check yt-dlp
     await execFileAsync(ytDlpCmd, ['--version']);
     
+    // Check Queue
+    const queueHealth = await MetadataOrchestrator.checkQueueHealth();
+    if (!queueHealth) throw new Error('Queue health check failed');
+
     res.json({
       success: true,
       database: 'connected',
       redis: 'connected',
-      ytdlp: 'available'
+      ytdlp: 'available',
+      queue: 'ready'
     });
   } catch (error: any) {
     res.status(500).json({
@@ -118,26 +124,58 @@ async function startServer() {
   try {
     // 1. Prisma Check
     await prisma.$queryRaw`SELECT 1`;
-    console.log('[Startup] Prisma Database: CONNECTED');
+    console.log('[BOOT] Prisma Connected');
 
     // 2. Redis Check
-    const ping = await cacheRedisClient.ping();
+    const ping = await redisClient.ping();
     if (ping !== 'PONG') throw new Error('Redis ping failed');
-    console.log('[Startup] Redis Cache: CONNECTED');
+    console.log('[BOOT] Redis Connected');
 
-    // 3. yt-dlp Check
+    // 3. Queue Check
+    const queueHealth = await MetadataOrchestrator.checkQueueHealth();
+    if (!queueHealth) throw new Error('BullMQ Queue Health Check Failed');
+    console.log('[BOOT] BullMQ Queue Ready');
+
+    // 4. Worker Start
+    startWorker();
+    console.log('[BOOT] BullMQ Worker Started');
+
+    // 5. yt-dlp Check
     const { stdout } = await execFileAsync(ytDlpCmd, ['--version']);
-    console.log(`[Startup] yt-dlp: AVAILABLE (v${stdout.trim()})`);
+    console.log(`[BOOT] yt-dlp Available (v${stdout.trim()})`);
 
   } catch (error: any) {
-    console.error('[Startup] FATAL ERROR during initialization:', error.message);
+    console.error('[BOOT] FATAL ERROR during initialization:', error.message);
     process.exit(1);
   }
 
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`[BullMQ] YtDlpWorker initialized with ID: ${ytDlpWorker.id}`);
+  const server = app.listen(PORT, () => {
+    console.log(`[BOOT] Server Listening on port ${PORT}`);
   });
+
+  // Graceful Shutdown Handlers
+  const gracefulShutdown = async (signal: string) => {
+    console.log(`\n[Shutdown] Received ${signal}, starting graceful shutdown...`);
+    
+    server.close(() => {
+      console.log('[Shutdown] Express server closed.');
+    });
+
+    try {
+      await closeWorker();
+      await MetadataOrchestrator.close();
+      await redisClient.quit();
+      await prisma.$disconnect();
+      console.log('[Shutdown] All connections closed successfully.');
+      process.exit(0);
+    } catch (err) {
+      console.error('[Shutdown] Error during shutdown:', err);
+      process.exit(1);
+    }
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }
 
 startServer();

@@ -1,9 +1,6 @@
 import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
-import Redis from 'ioredis';
-
-// Create a single Redis connection for rate limiters
-const redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+import { redisClient } from '../config/redis';
 
 redisClient.on('error', (err) => {
   console.error('[Redis Rate Limiter] Error:', err);

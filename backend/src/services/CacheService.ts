@@ -1,7 +1,6 @@
-import Redis from 'ioredis';
+import { redisClient as redis } from '../config/redis';
 import { VideoCacheRepository } from '../repositories/VideoCacheRepository';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 const repo = new VideoCacheRepository();
 
 const L1_TTL_SECONDS = 60 * 60; // 1 hour in Redis by default

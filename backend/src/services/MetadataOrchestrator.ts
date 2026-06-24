@@ -1,15 +1,20 @@
 import { Queue, QueueEvents } from 'bullmq';
-import { cacheRedisClient, CacheService } from './CacheService';
+import { CacheService } from './CacheService';
 import { VideoIdExtractor } from '../utils/VideoIdExtractor';
 import { YTDLP_QUEUE_NAME } from '../workers/YtDlpWorker';
+import { createRedisClient, redisClient } from '../config/redis';
+
+// Dedicated connections for BullMQ
+const queueConnection = createRedisClient();
+const queueEventsConnection = createRedisClient();
 
 // Initialize the BullMQ queue
 export const ytDlpQueue = new Queue(YTDLP_QUEUE_NAME, {
-  connection: cacheRedisClient as any
+  connection: queueConnection as any
 });
 
 const queueEvents = new QueueEvents(YTDLP_QUEUE_NAME, {
-  connection: cacheRedisClient as any
+  connection: queueEventsConnection as any
 });
 
 export class MetadataOrchestrator {
@@ -96,5 +101,34 @@ export class MetadataOrchestrator {
       removeOnFail: true,
       priority: 2 // lower priority than initial cache-miss fetches
     });
+  }
+
+  /**
+   * Health Check utility for Queue and Redis.
+   */
+  static async checkQueueHealth() {
+    try {
+      const ping = await redisClient.ping();
+      if (ping !== 'PONG') throw new Error('Redis ping failed');
+
+      // Check if queue is accessible
+      await ytDlpQueue.getJobCounts();
+
+      return true;
+    } catch (error) {
+      console.error('[MetadataOrchestrator] Health Check Failed:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Graceful Shutdown for Queues
+   */
+  static async close() {
+    console.log('[MetadataOrchestrator] Closing BullMQ connections...');
+    await ytDlpQueue.close();
+    await queueEvents.close();
+    queueConnection.disconnect();
+    queueEventsConnection.disconnect();
   }
 }
