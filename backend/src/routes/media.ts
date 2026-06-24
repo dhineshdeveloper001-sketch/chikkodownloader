@@ -7,25 +7,13 @@ import util from 'util';
 const execFileAsync = util.promisify(execFile);
 const ffmpegPath = require('ffmpeg-static');
 import jwt from 'jsonwebtoken';
-import rateLimit from 'express-rate-limit';
+import { RateLimitMiddleware } from '../middleware/RateLimitMiddleware';
+import { MetadataOrchestrator } from '../services/MetadataOrchestrator';
 import prisma from '../prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { validate, mediaMetadataSchema, mediaDownloadSchema, preventSSRF } from '../middleware/security';
-import { MetadataService } from '../services/MetadataService';
 
 const router = Router();
-
-const downloadLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  message: { error: 'Too many download requests, please try again later.' }
-});
-
-const metadataLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000,
-  max: 30,
-  message: { error: 'Too many metadata requests, please try again later.' }
-});
 
 const DOWNLOADS_DIR = path.join(__dirname, '../../downloads');
 
@@ -36,11 +24,11 @@ if (!fs.existsSync(DOWNLOADS_DIR)) {
 const activeDownloads = new Map();
 
 // Legacy simple URL validator can be removed, Zod handles it.
-router.post('/metadata', authenticate, metadataLimiter, validate(mediaMetadataSchema), preventSSRF, async (req: AuthRequest, res) => {
+router.post('/metadata', authenticate, RateLimitMiddleware.metadataLimiter, validate(mediaMetadataSchema), preventSSRF, async (req: AuthRequest, res) => {
   const { url } = req.body;
 
   try {
-    const metadata = await MetadataService.getMetadata(url);
+    const metadata = await MetadataOrchestrator.getMetadata(url);
     res.json(metadata);
   } catch (err: any) {
     console.error('Metadata Error:', err.message);
@@ -48,7 +36,7 @@ router.post('/metadata', authenticate, metadataLimiter, validate(mediaMetadataSc
   }
 });
 
-router.post('/download', authenticate, downloadLimiter, validate(mediaDownloadSchema), preventSSRF, async (req: AuthRequest, res) => {
+router.post('/download', authenticate, RateLimitMiddleware.downloadLimiter, validate(mediaDownloadSchema), preventSSRF, async (req: AuthRequest, res) => {
   const { url, filename, size, contentType, isYtDlp, formatId, downloadType } = req.body;
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
@@ -135,12 +123,15 @@ router.post('/download', authenticate, downloadLimiter, validate(mediaDownloadSc
         '--format', ytFormat,
         '--ffmpeg-location', ffmpegPath,
         '--merge-output-format', 'mp4',
-        ...require('../services/MetadataService').ytBaseArgs,
+        '--no-warnings',
+        '--extractor-args', 'youtube:player_client=android',
+        '--extractor-args', 'youtube:player_skip=webpage,configs,js',
+        '--geo-bypass',
         '--newline',
         url
       ];
       
-      const subprocess = spawn(require('../services/MetadataService').ytDlpCmd, ytArgs);
+      const subprocess = spawn(require('../services/YtDlpService').ytDlpCmd, ytArgs);
 
       subprocess.on('close', async (code) => {
         if (code !== 0) {

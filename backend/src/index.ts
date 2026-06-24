@@ -9,7 +9,7 @@ import statsRoutes from './routes/stats';
 import adminRoutes from './routes/admin';
 import healthRoutes from './routes/health';
 import path from 'path';
-import { BackgroundRefreshWorker } from './workers/BackgroundRefreshWorker';
+import { ytDlpWorker } from './workers/YtDlpWorker';
 
 dotenv.config();
 
@@ -73,5 +73,5 @@ app.use((req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  BackgroundRefreshWorker.start();
+  console.log(`[BullMQ] YtDlpWorker initialized with ID: ${ytDlpWorker.id}`);
 });

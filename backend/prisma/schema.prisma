@@ -61,23 +61,21 @@ model AuditLog {
 }
 
 model VideoCache {
-  id              String   @id @default(uuid())
-  video_id        String   @unique
-  url             String
-  title           String?
-  thumbnail       String?
-  duration        Int?
-  uploader        String?
-  metadata_json   Json
-  is_private      Boolean?
-  view_count      BigInt?
-  last_error      String?
-  failure_count   Int      @default(0)
-  last_fetched_at DateTime @default(now())
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
+  id          String   @id @default(uuid())
+  videoId     String   @unique @map("video_id")
+  title       String?
+  thumbnail   String?
+  duration    Int?
+  uploader    String?
+  viewCount   BigInt?  @map("view_count")
+  metadata    Json     // Basic metadata (title, views, etc)
+  formats     Json     // Large array of video/audio formats
+  isNegative  Boolean  @default(false) @map("is_negative") // True if video is private/unavailable
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  @@index([video_id])
-  @@index([last_fetched_at])
+  @@index([videoId])
+  @@index([expiresAt])
   @@map("video_cache")
 }
