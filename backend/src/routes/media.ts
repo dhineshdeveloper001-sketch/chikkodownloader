@@ -11,6 +11,7 @@ import rateLimit from 'express-rate-limit';
 import prisma from '../prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { validate, mediaMetadataSchema, mediaDownloadSchema, preventSSRF } from '../middleware/security';
+import { MetadataService } from '../services/MetadataService';
 
 const router = Router();
 
@@ -19,136 +20,31 @@ const downloadLimiter = rateLimit({
   max: 20,
   message: { error: 'Too many download requests, please try again later.' }
 });
+
+const metadataLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 30,
+  message: { error: 'Too many metadata requests, please try again later.' }
+});
+
 const DOWNLOADS_DIR = path.join(__dirname, '../../downloads');
 
 if (!fs.existsSync(DOWNLOADS_DIR)) {
   fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
 }
 
-let ytDlpCmd = 'yt-dlp';
-const possiblePaths = [
-  path.join(process.cwd(), 'yt-dlp'),
-  process.env.HOME ? path.join(process.env.HOME, '.local/bin/yt-dlp') : null,
-  '/opt/render/project/src/.venv/bin/yt-dlp',
-  '/opt/render/project/.local/bin/yt-dlp'
-].filter(Boolean) as string[];
-
-for (const p of possiblePaths) {
-  if (fs.existsSync(p)) {
-    ytDlpCmd = p;
-    break;
-  }
-}
-console.log(`[Startup] Resolved yt-dlp command to: ${ytDlpCmd}`);
-
 const activeDownloads = new Map();
 
 // Legacy simple URL validator can be removed, Zod handles it.
-router.post('/metadata', authenticate, validate(mediaMetadataSchema), preventSSRF, async (req: AuthRequest, res) => {
+router.post('/metadata', authenticate, metadataLimiter, validate(mediaMetadataSchema), preventSSRF, async (req: AuthRequest, res) => {
   const { url } = req.body;
 
   try {
-    const response = await axios.head(url).catch(() => null);
-    let contentType = (response?.headers['content-type'] as string) || 'application/octet-stream';
-    let filename = 'downloaded_file';
-    let size = response?.headers['content-length'] ? parseInt(response.headers['content-length'] as string, 10) : null;
-    let isYtDlp = false;
-    let thumbnail = null;
-    let videoFormats: any[] = [];
-    let audioFormats: any[] = [];
-
-    if (contentType.includes('text/html') || !response) {
-      try {
-        const { stdout } = await execFileAsync(ytDlpCmd, ['--dump-single-json', '--no-warnings', url], { maxBuffer: 20 * 1024 * 1024 });
-        const info = JSON.parse(stdout) as any;
-
-        const formats = info.formats || [];
-        const videoFormatsMap = new Map();
-        const audioFormatsMap = new Map();
-
-        formats.forEach((f: any) => {
-          if (f.vcodec === 'none' && f.acodec !== 'none') {
-            const abr = Math.round(f.abr || 0);
-            if (abr > 0) audioFormatsMap.set(abr, f);
-          }
-          
-          if (f.vcodec !== 'none') {
-            const height = f.height;
-            if (height) {
-              const existing = videoFormatsMap.get(height);
-              if (!existing || f.fps > existing.fps || (f.fps === existing.fps && f.ext === 'mp4')) {
-                videoFormatsMap.set(height, f);
-              }
-            }
-          }
-        });
-
-        videoFormats = Array.from(videoFormatsMap.values()).map((f: any) => {
-          // Use the smallest dimension to determine standard quality (e.g., 854x480 vertical video is still 480p)
-          const standardHeight = Math.min(f.width || f.height, f.height);
-          let resLabel = `${standardHeight}p`;
-          
-          if (standardHeight === 1440) resLabel = '2K';
-          if (standardHeight === 2160) resLabel = '4K';
-          if (standardHeight === 4320) resLabel = '8K';
-          
-          return {
-            formatId: f.format_id,
-            resolution: resLabel,
-            height: f.height, // keep original height for sorting the raw quality
-            ext: f.ext,
-            fps: f.fps,
-            size: f.filesize || f.filesize_approx || null
-          };
-        }).sort((a, b) => b.height - a.height);
-
-        audioFormats = Array.from(audioFormatsMap.values()).map((f: any) => ({
-          formatId: f.format_id,
-          bitrate: `${Math.round(f.abr)} kbps`,
-          ext: f.ext,
-          size: f.filesize || f.filesize_approx || null
-        })).sort((a, b) => parseInt(b.bitrate) - parseInt(a.bitrate));
-
-        
-        filename = info.title ? `${info.title}.${info.ext || 'mp4'}` : 'video.mp4';
-        filename = filename.replace(/[/\\?%*:|"<>]/g, '-'); // sanitize filename
-        contentType = `video/${info.ext || 'mp4'}`;
-        size = info.filesize || info.filesize_approx || null;
-        thumbnail = info.thumbnail || null;
-        isYtDlp = true;
-      } catch (ytErr: any) {
-        console.error('[Metadata Error] yt-dlp execution failed:', ytErr);
-        return res.status(400).json({ error: ytErr.message || 'Unsupported media URL or video unavailable.' });
-      }
-    } else {
-      const contentDisposition = response?.headers['content-disposition'];
-      if (contentDisposition) {
-        const match = contentDisposition.match(/filename="?([^"]+)"?/);
-        if (match && match[1]) filename = match[1];
-      }
-      if (filename === 'downloaded_file') {
-        const urlFilename = path.basename(new URL(url).pathname);
-        if (urlFilename && urlFilename.includes('.')) filename = urlFilename;
-      }
-    }
-
-    // Sanitize filename to prevent filesystem mismatches on Windows
-    filename = filename.replace(/[<>:"\/\\|?*]+/g, '_');
-
-    res.json({ 
-      url, 
-      filename, 
-      contentType, 
-      size, 
-      thumbnail, 
-      isYtDlp,
-      title: filename.replace(/\.[^/.]+$/, ""),
-      duration: isYtDlp ? 'Unknown' : null, // Info.duration could be added above if needed
-      formats: isYtDlp ? { video: videoFormats, audio: audioFormats } : null
-    });
-  } catch (err) {
-    console.error('Metadata Error:', err);
-    res.status(500).json({ error: 'Failed to fetch metadata or URL is not accessible.' });
+    const metadata = await MetadataService.getMetadata(url);
+    res.json(metadata);
+  } catch (err: any) {
+    console.error('Metadata Error:', err.message);
+    res.status(500).json({ error: err.message || 'Failed to fetch metadata' });
   }
 });
 
@@ -156,6 +52,13 @@ router.post('/download', authenticate, downloadLimiter, validate(mediaDownloadSc
   const { url, filename, size, contentType, isYtDlp, formatId, downloadType } = req.body;
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+  const ext = path.extname(filename).toLowerCase().replace('.', '');
+  const allowedExtensions = ['mp4', 'mp3', 'm4a', 'webm', 'jpg', 'jpeg', 'png', 'gif', 'mkv'];
+  
+  if (!allowedExtensions.includes(ext)) {
+    return res.status(400).json({ error: 'Invalid file type. Only media files are allowed.' });
+  }
 
   try {
     const downloadRecord = await prisma.download.create({
@@ -232,11 +135,12 @@ router.post('/download', authenticate, downloadLimiter, validate(mediaDownloadSc
         '--format', ytFormat,
         '--ffmpeg-location', ffmpegPath,
         '--merge-output-format', 'mp4',
+        ...require('../services/MetadataService').ytBaseArgs,
         '--newline',
         url
       ];
       
-      const subprocess = spawn(ytDlpCmd, ytArgs);
+      const subprocess = spawn(require('../services/MetadataService').ytDlpCmd, ytArgs);
 
       subprocess.on('close', async (code) => {
         if (code !== 0) {
@@ -360,7 +264,7 @@ router.get('/serve/:id', async (req, res) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as { id: string };
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { id: string };
     const userId = decoded.id;
 
     const downloadRecord = await prisma.download.findUnique({ where: { id } });
@@ -368,7 +272,14 @@ router.get('/serve/:id', async (req, res) => {
       return res.status(403).json({ error: 'Forbidden: You do not have permission to access this file' });
     }
 
-    const filePath = path.join(DOWNLOADS_DIR, `${id}_${downloadRecord.file_name}`);
+    const secureId = path.basename(id);
+    const secureFilename = path.basename(downloadRecord.file_name);
+    const filePath = path.resolve(DOWNLOADS_DIR, `${secureId}_${secureFilename}`);
+    
+    if (!filePath.startsWith(path.resolve(DOWNLOADS_DIR))) {
+      return res.status(403).json({ error: 'Security Exception: Path Traversal Detected' });
+    }
+
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ error: 'File missing from server disk' });
     }

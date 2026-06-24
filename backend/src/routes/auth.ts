@@ -30,7 +30,7 @@ router.post('/register', authLimiter, validate(registerSchema), async (req, res)
       data: { user_id: user.id, action: 'REGISTER', details: `User registered: ${email}` }
     });
 
-    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
+    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET!, { expiresIn: '7d' });
     res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
   } catch (err: any) {
     console.error('Registration error:', process.env.NODE_ENV === 'production' ? err.message : err);
@@ -57,7 +57,7 @@ router.post('/login', authLimiter, validate(loginSchema), async (req, res) => {
       data: { user_id: user.id, action: 'LOGIN_SUCCESS', details: `Successful login for ${email}` }
     });
 
-    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
+    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET!, { expiresIn: '7d' });
     res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
   } catch (err: any) {
     console.error('Login error:', process.env.NODE_ENV === 'production' ? err.message : err);

@@ -20,7 +20,7 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
   }
 
   try {
-    const secret = process.env.JWT_SECRET || 'secret';
+    const secret = process.env.JWT_SECRET!;
     const decoded = jwt.verify(token, secret) as { id: string };
     req.user = { id: decoded.id };
     next();

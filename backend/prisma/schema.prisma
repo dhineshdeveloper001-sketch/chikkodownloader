@@ -59,3 +59,25 @@ model AuditLog {
   @@index([created_at(sort: Desc)])
   @@map("audit_logs")
 }
+
+model VideoCache {
+  id              String   @id @default(uuid())
+  video_id        String   @unique
+  url             String
+  title           String?
+  thumbnail       String?
+  duration        Int?
+  uploader        String?
+  metadata_json   Json
+  is_private      Boolean?
+  view_count      BigInt?
+  last_error      String?
+  failure_count   Int      @default(0)
+  last_fetched_at DateTime @default(now())
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@index([video_id])
+  @@index([last_fetched_at])
+  @@map("video_cache")
+}
