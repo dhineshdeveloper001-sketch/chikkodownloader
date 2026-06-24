@@ -10,6 +10,13 @@ import adminRoutes from './routes/admin';
 import healthRoutes from './routes/health';
 import path from 'path';
 import { ytDlpWorker } from './workers/YtDlpWorker';
+import prisma from './prisma';
+import { cacheRedisClient } from './services/CacheService';
+import { ytDlpCmd } from './services/YtDlpService';
+import { execFile } from 'child_process';
+import util from 'util';
+
+const execFileAsync = util.promisify(execFile);
 
 dotenv.config();
 
@@ -24,6 +31,8 @@ if (!process.env.DATABASE_URL) {
 }
 
 const app = express();
+app.set('trust proxy', 1); // Render proxy support for express-rate-limit
+
 const PORT = process.env.PORT || 5000;
 
 // Security Middleware
@@ -54,6 +63,30 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/health', healthRoutes);
 
+app.get('/health', async (req, res) => {
+  try {
+    // Check DB
+    await prisma.$queryRaw`SELECT 1`;
+    // Check Redis
+    const ping = await cacheRedisClient.ping();
+    if (ping !== 'PONG') throw new Error('Redis ping failed');
+    // Check yt-dlp
+    await execFileAsync(ytDlpCmd, ['--version']);
+    
+    res.json({
+      success: true,
+      database: 'connected',
+      redis: 'connected',
+      ytdlp: 'available'
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 app.get('/media/:filename', (req, res) => {
   res.status(403).json({ error: 'Direct file access is forbidden. Please use the secure download proxy.' });
 });
@@ -71,7 +104,40 @@ app.use((req, res, next) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`[BullMQ] YtDlpWorker initialized with ID: ${ytDlpWorker.id}`);
+// Global Error Middleware
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('[Global Error]', err);
+  res.status(500).json({
+    success: false,
+    error: err.message || 'Internal Server Error'
+  });
 });
+
+async function startServer() {
+  console.log('Running Startup Validations...');
+  try {
+    // 1. Prisma Check
+    await prisma.$queryRaw`SELECT 1`;
+    console.log('[Startup] Prisma Database: CONNECTED');
+
+    // 2. Redis Check
+    const ping = await cacheRedisClient.ping();
+    if (ping !== 'PONG') throw new Error('Redis ping failed');
+    console.log('[Startup] Redis Cache: CONNECTED');
+
+    // 3. yt-dlp Check
+    const { stdout } = await execFileAsync(ytDlpCmd, ['--version']);
+    console.log(`[Startup] yt-dlp: AVAILABLE (v${stdout.trim()})`);
+
+  } catch (error: any) {
+    console.error('[Startup] FATAL ERROR during initialization:', error.message);
+    process.exit(1);
+  }
+
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`[BullMQ] YtDlpWorker initialized with ID: ${ytDlpWorker.id}`);
+  });
+}
+
+startServer();

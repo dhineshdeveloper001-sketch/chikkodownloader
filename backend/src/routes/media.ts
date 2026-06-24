@@ -32,7 +32,7 @@ router.post('/metadata', authenticate, RateLimitMiddleware.metadataLimiter, vali
     res.json(metadata);
   } catch (err: any) {
     console.error('Metadata Error:', err.message);
-    res.status(500).json({ error: err.message || 'Failed to fetch metadata' });
+    res.status(500).json({ success: false, error: err.message || 'Failed to fetch metadata' });
   }
 });
 
@@ -45,7 +45,7 @@ router.post('/download', authenticate, RateLimitMiddleware.downloadLimiter, vali
   const allowedExtensions = ['mp4', 'mp3', 'm4a', 'webm', 'jpg', 'jpeg', 'png', 'gif', 'mkv'];
   
   if (!allowedExtensions.includes(ext)) {
-    return res.status(400).json({ error: 'Invalid file type. Only media files are allowed.' });
+    return res.status(400).json({ success: false, error: 'Invalid file type. Only media files are allowed.' });
   }
 
   try {
@@ -219,7 +219,7 @@ router.post('/download', authenticate, RateLimitMiddleware.downloadLimiter, vali
 
   } catch (err: any) {
     console.error('Download Handler Error:', process.env.NODE_ENV === 'production' ? err.message : err);
-    res.status(500).json({ error: 'Failed to initiate download' });
+    res.status(500).json({ success: false, error: err.message || 'Failed to initiate download' });
   }
 });
 
