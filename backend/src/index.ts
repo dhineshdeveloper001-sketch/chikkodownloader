@@ -9,10 +9,7 @@ import statsRoutes from './routes/stats';
 import adminRoutes from './routes/admin';
 import healthRoutes from './routes/health';
 import path from 'path';
-import { startWorker, closeWorker } from './workers/YtDlpWorker';
 import prisma from './prisma';
-import { redisClient } from './config/redis';
-import { MetadataOrchestrator } from './services/MetadataOrchestrator';
 import { ytDlpCmd } from './services/YtDlpService';
 import { execFile } from 'child_process';
 import util from 'util';
@@ -68,22 +65,13 @@ app.get('/health', async (req, res) => {
   try {
     // Check DB
     await prisma.$queryRaw`SELECT 1`;
-    // Check Redis
-    const ping = await redisClient.ping();
-    if (ping !== 'PONG') throw new Error('Redis ping failed');
     // Check yt-dlp
     await execFileAsync(ytDlpCmd, ['--version']);
     
-    // Check Queue
-    const queueHealth = await MetadataOrchestrator.checkQueueHealth();
-    if (!queueHealth) throw new Error('Queue health check failed');
-
     res.json({
       success: true,
       database: 'connected',
-      redis: 'connected',
-      ytdlp: 'available',
-      queue: 'ready'
+      ytdlp: 'available'
     });
   } catch (error: any) {
     res.status(500).json({
@@ -126,21 +114,7 @@ async function startServer() {
     await prisma.$queryRaw`SELECT 1`;
     console.log('[BOOT] Prisma Connected');
 
-    // 2. Redis Check
-    const ping = await redisClient.ping();
-    if (ping !== 'PONG') throw new Error('Redis ping failed');
-    console.log('[BOOT] Redis Connected');
-
-    // 3. Queue Check
-    const queueHealth = await MetadataOrchestrator.checkQueueHealth();
-    if (!queueHealth) throw new Error('BullMQ Queue Health Check Failed');
-    console.log('[BOOT] BullMQ Queue Ready');
-
-    // 4. Worker Start
-    startWorker();
-    console.log('[BOOT] BullMQ Worker Started');
-
-    // 5. yt-dlp Check
+    // 2. yt-dlp Check
     const { stdout } = await execFileAsync(ytDlpCmd, ['--version']);
     console.log(`[BOOT] yt-dlp Available (v${stdout.trim()})`);
 
@@ -162,9 +136,6 @@ async function startServer() {
     });
 
     try {
-      await closeWorker();
-      await MetadataOrchestrator.close();
-      await redisClient.quit();
       await prisma.$disconnect();
       console.log('[Shutdown] All connections closed successfully.');
       process.exit(0);

@@ -8,7 +8,7 @@ const execFileAsync = util.promisify(execFile);
 const ffmpegPath = require('ffmpeg-static');
 import jwt from 'jsonwebtoken';
 import { RateLimitMiddleware } from '../middleware/RateLimitMiddleware';
-import { MetadataOrchestrator } from '../services/MetadataOrchestrator';
+import { MetadataService } from '../services/MetadataService';
 import prisma from '../prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { validate, mediaMetadataSchema, mediaDownloadSchema, preventSSRF } from '../middleware/security';
@@ -28,7 +28,7 @@ router.post('/metadata', authenticate, RateLimitMiddleware.metadataLimiter, vali
   const { url } = req.body;
 
   try {
-    const metadata = await MetadataOrchestrator.getMetadata(url);
+    const metadata = await MetadataService.getMetadata(url);
     res.json(metadata);
   } catch (err: any) {
     console.error('Metadata Error:', err.message);
