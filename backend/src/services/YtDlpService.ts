@@ -71,11 +71,18 @@ export class YtDlpService {
       if (err.killed && err.signal === 'SIGTERM') {
         throw new Error(`yt-dlp timed out after ${YTDLP_TIMEOUT}ms`);
       }
-      const errorMessage = `${err.message || ''} ${err.stderr || ''} ${err.stdout || ''}`;
+      const errorMessage = `${err.message || ''} ${err.stderr || ''} ${err.stdout || ''} ${JSON.stringify(err)}`.toLowerCase();
       
-      // FALLBACK ROUTE: Intercept ALL failures and route to Cobalt API Mirror
-      console.warn(`[YtDlpService] Primary extraction caught an exception. Deploying bulletproof Cobalt Fallback Mirror for ${url}`);
-        console.warn(`[YtDlpService] YouTube Bot-Block Detected! Engaging Cobalt Fallback Mirror for ${url}`);
+      if (
+        errorMessage.includes('sign in to confirm') || 
+        errorMessage.includes('bot') || 
+        errorMessage.includes('cookies') || 
+        errorMessage.includes('command failed') || 
+        errorMessage.includes('403') || 
+        errorMessage.includes('500') ||
+        errorMessage.includes('429')
+      ) {
+        console.warn(`[YtDlpService] Datacenter Block Detected! Engaging Cobalt Fallback Mirror for ${url}`);
         try {
           const cobaltRes = await axios.post('https://api.cobalt.tools/', {
             url: url,
@@ -89,10 +96,8 @@ export class YtDlpService {
             timeout: 9000
           });
 
-          // Map Cobalt output directly into our expected Chikko format
           if (cobaltRes.data && cobaltRes.data.url) {
             console.log(`[YtDlpService] Cobalt Fallback SUCCESS for ${url}`);
-            
             return {
               title: "Chikko Bypassed Stream",
               thumbnail: "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=500",
@@ -122,7 +127,13 @@ export class YtDlpService {
         } catch (cobaltErr: any) {
           console.error(`[YtDlpService] Cobalt Fallback also failed: ${cobaltErr.message}`);
         }
-      throw err;
+        
+        // GRACEFUL ROUTE ASSURANCE: If Cobalt failed but it WAS a bot block, do not throw raw crash
+        throw new Error('Both the primary extraction and the Cobalt fallback mirror were blocked by YouTube datacenter restrictions.');
+      }
+
+      // If it wasn't a bot block, throw the clean original error
+      throw new Error(`Extraction failed: ${err.message || 'Unknown error'}`);
     }
   }
 
