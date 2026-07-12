@@ -12,6 +12,7 @@ import statsRoutes from './routes/stats';
 import adminRoutes from './routes/admin';
 import healthRoutes from './routes/health';
 import path from 'path';
+import fs from 'fs';
 import prisma from './prisma';
 import { ytDlpCmd } from './services/YtDlpService';
 import { execFile } from 'child_process';
