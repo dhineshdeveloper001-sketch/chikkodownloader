@@ -9,6 +9,7 @@ import Downloader from './pages/Downloader';
 import History from './pages/History';
 import Dashboard from './pages/Dashboard';
 import Admin from './pages/Admin';
+import About from './pages/About';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -36,6 +37,7 @@ const AppRoutes = () => {
           <Route path="history" element={<History />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="admin" element={<AdminRoute><Admin /></AdminRoute>} />
+          <Route path="about" element={<About />} />
         </Route>
       </Routes>
     </>

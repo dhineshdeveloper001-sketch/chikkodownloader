@@ -27,7 +27,12 @@ export class CacheService {
           metadata: l2Data.metadata,
           formats: l2Data.formats,
           expiresAt: l2Data.expiresAt.getTime(),
-          isStale: Date.now() > l2Data.expiresAt.getTime()
+          isStale: Date.now() > l2Data.expiresAt.getTime(),
+          url: (l2Data.metadata as any)?.url || `https://youtu.be/${videoId}`,
+          filename: `${(l2Data.title || 'video').replace(/[^a-zA-Z0-9]/g, '_')}.mp4`,
+          isYtDlp: true,
+          contentType: 'video/mp4',
+          size: null
         };
         
         return payload;

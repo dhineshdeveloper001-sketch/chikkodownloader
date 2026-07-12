@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { DownloadCloud, LogOut, Moon, Sun, Clock, LayoutDashboard, Menu, X, Shield } from 'lucide-react';
+import { DownloadCloud, LogOut, Moon, Sun, Clock, LayoutDashboard, Menu, X, Shield, User } from 'lucide-react';
 import clsx from 'clsx';
 
 const Layout = () => {
@@ -23,7 +23,8 @@ const Layout = () => {
   const navItems = [
     { to: '/', icon: DownloadCloud, label: 'Downloader' },
     { to: '/history', icon: Clock, label: 'History' },
-    { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' }
+    { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/about', icon: User, label: 'About' }
   ];
 
   if (user?.role === 'admin') {

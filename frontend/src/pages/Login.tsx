@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -18,11 +18,16 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await axios.post(`${API_BASE}/api/auth/login`, { email, password });
-      login(res.data.token, res.data.user);
+      const res = await axios.post(`${API_BASE}/api/auth/login`, { username, password });
+      login(res.data.user);
       navigate('/');
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Login failed');
+      const data = err.response?.data;
+      if (data?.details && Array.isArray(data.details)) {
+        toast.error(data.details[0].message);
+      } else {
+        toast.error(data?.error || data?.message || 'Login failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -47,18 +52,18 @@ const Login = () => {
         <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-[2.5rem] shadow-[0_8px_32px_0_rgba(0,0,0,0.3)]">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-indigo-100 ml-1">Email Address</label>
+              <label className="text-sm font-semibold text-indigo-100 ml-1">Username</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <Mail className="h-5 w-5 text-indigo-300" />
                 </div>
                 <input 
-                  type="email" 
+                  type="text" 
                   required
                   className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 text-white rounded-2xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none transition-all placeholder:text-indigo-300/50 font-medium"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                 />
               </div>
             </div>

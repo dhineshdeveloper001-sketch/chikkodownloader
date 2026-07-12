@@ -27,3 +27,9 @@ frontend/.eslintcache
 .DS_Store
 Thumbs.db
 test.js
+
+# Excluded binary and secrets
+backend/cookies.txt
+backend/yt-dlp.exe
+backend/test-db.js
+backend/test.ts

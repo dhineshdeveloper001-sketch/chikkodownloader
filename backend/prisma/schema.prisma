@@ -8,33 +8,38 @@ datasource db {
 }
 
 model User {
-  id            String     @id @default(uuid())
-  name          String
-  email         String     @unique
-  password_hash String
-  role          String     @default("user") // "user" or "admin"
-  created_at    DateTime   @default(now())
-  downloads     Download[]
-  auditLogs     AuditLog[]
+  id             String            @id @default(uuid())
+  username       String            @unique
+  passwordHash   String            @map("password_hash")
+  role           String            @default("USER")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  lastLogin      DateTime?         @map("last_login")
+  failedAttempts Int               @default(0) @map("failed_attempts")
+  lockedUntil    DateTime?         @map("locked_until")
+  isActive       Boolean           @default(true) @map("is_active")
+  
+  downloads      DownloadHistory[]
+  auditLogs      AuditLog[]
 
   @@map("users")
 }
 
-model Download {
-  id            String   @id @default(uuid())
-  user_id       String
-  original_url  String
-  file_name     String
-  file_type     String
-  file_size     BigInt
-  download_date DateTime @default(now())
-  status        String   @default("completed") // "downloading", "completed", "error"
+model DownloadHistory {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  platform     String
+  url          String
+  title        String
+  thumbnail    String?
+  status       String   @default("completed") // "downloading", "completed", "error"
+  downloadTime DateTime @default(now()) @map("download_time")
 
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([user_id])
-  @@index([download_date(sort: Desc)])
-  @@map("downloads")
+  @@index([userId])
+  @@index([downloadTime(sort: Desc)])
+  @@map("download_history")
 }
 
 model DownloadStat {
@@ -48,15 +53,15 @@ model DownloadStat {
 
 model AuditLog {
   id         String   @id @default(uuid())
-  user_id    String?  // nullable for anonymous/system actions
-  action     String   // e.g. "LOGIN", "REGISTER", "DOWNLOAD_START"
-  details    String?  // JSON string or simple text describing the action
-  created_at DateTime @default(now())
+  userId     String?  @map("user_id")
+  action     String   
+  details    String?  
+  createdAt  DateTime @default(now()) @map("created_at")
 
-  user       User?    @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  @@index([user_id])
-  @@index([created_at(sort: Desc)])
+  @@index([userId])
+  @@index([createdAt(sort: Desc)])
   @@map("audit_logs")
 }
 

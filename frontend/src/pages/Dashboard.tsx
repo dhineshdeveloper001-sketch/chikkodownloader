@@ -22,8 +22,10 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/api/stats/dashboard`);
-        setStats(res.data);
+        const res = await axios.get(`${API_BASE}/api/stats/dashboard`, { withCredentials: true });
+        if (res.data.success) {
+          setStats(res.data);
+        }
       } catch (err) {
         console.error('Failed to fetch stats');
       } finally {
@@ -93,7 +95,7 @@ const Dashboard = () => {
 
       <div className="bg-white/60 dark:bg-slate-800/40 backdrop-blur-xl rounded-[2.5rem] p-8 md:p-12 border border-white/40 dark:border-slate-700/50 shadow-2xl">
         <h3 className="text-2xl font-black text-slate-800 dark:text-white mb-8 flex items-center gap-3">
-          <FileType className="text-indigo-500" /> File Types Distribution
+          <FileType className="text-indigo-500" /> Platform Distribution
         </h3>
         
         {Object.keys(stats.fileTypes).length === 0 ? (
@@ -102,13 +104,13 @@ const Dashboard = () => {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {Object.entries(stats.fileTypes).map(([type, count]) => (
-              <div key={type} className="flex items-center gap-5 p-5 rounded-3xl bg-slate-50/80 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-shadow">
+            {Object.entries(stats.fileTypes).map(([platform, count]) => (
+              <div key={platform} className="flex items-center gap-5 p-5 rounded-3xl bg-slate-50/80 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-shadow">
                 <div className="bg-white dark:bg-slate-800 p-3 rounded-2xl shadow-sm text-indigo-600 dark:text-indigo-400">
                   <FileType size={28} />
                 </div>
                 <div>
-                  <div className="text-xl font-black text-slate-800 dark:text-white capitalize leading-none mb-1">{type}</div>
+                  <div className="text-xl font-black text-slate-800 dark:text-white capitalize leading-none mb-1">{platform}</div>
                   <div className="text-sm font-bold text-slate-500">{String(count)} files</div>
                 </div>
               </div>

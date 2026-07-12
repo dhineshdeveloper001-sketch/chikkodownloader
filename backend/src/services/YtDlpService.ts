@@ -25,63 +25,39 @@ const YTDLP_TIMEOUT = parseInt(process.env.YTDLP_TIMEOUT || '30000', 10);
 
 export class YtDlpService {
   /**
-   * Executes yt-dlp safely with timeout and a specific client.
+   * Executes yt-dlp cleanly without platform-specific flags.
    */
-  private static async executeWithClient(url: string, client: string): Promise<any> {
+  static async fetchMetadata(url: string): Promise<any> {
     const args = [
       '--no-warnings',
       '--dump-single-json',
-      '--extractor-args', `youtube:player_client=${client}`,
-      '--extractor-args', 'youtube:player_skip=webpage,configs,js',
-      '--geo-bypass',
-      url
+      '--force-ipv4',
     ];
 
+    const cookiesPath = path.join(process.cwd(), 'cookies.txt');
+    if (fs.existsSync(cookiesPath) && fs.statSync(cookiesPath).size > 10) {
+      args.push('--cookies', cookiesPath);
+    }
+
+    args.push(
+      '--geo-bypass',
+      url
+    );
+
+    console.log(`[YtDlpService] Fetching metadata for ${url}`);
     try {
       const { stdout } = await execFileAsync(ytDlpCmd, args, {
         maxBuffer: 20 * 1024 * 1024,
         timeout: YTDLP_TIMEOUT, // Process killed automatically if it takes too long
       });
-      return JSON.parse(stdout);
+      const data = JSON.parse(stdout);
+      return this.parseResponse(url, data);
     } catch (err: any) {
       if (err.killed && err.signal === 'SIGTERM') {
         throw new Error(`yt-dlp timed out after ${YTDLP_TIMEOUT}ms`);
       }
-      throw err;
+      throw new Error(`yt-dlp error: ${err.message || err.stderr || err}`);
     }
-  }
-
-  /**
-   * Executes yt-dlp using the fallback chain: Android -> iOS -> Web
-   */
-  static async fetchMetadata(url: string): Promise<any> {
-    const clients = ['android', 'ios', 'web'];
-    let lastError: any = null;
-
-    for (const client of clients) {
-      try {
-        console.log(`[YtDlpService] Attempting fetch with client: ${client} for ${url}`);
-        const startTime = Date.now();
-        
-        const data = await this.executeWithClient(url, client);
-        
-        console.log(`[YtDlpService] Success with ${client} in ${Date.now() - startTime}ms`);
-        return this.parseResponse(url, data);
-      } catch (err: any) {
-        console.warn(`[YtDlpService] Failed with ${client}: ${err.message}`);
-        lastError = err;
-        
-        // If it's a known negative issue (private/geo), don't retry with other clients
-        const errMsg = err.message || err.stderr || '';
-        if (errMsg.includes('Private video') || errMsg.includes('Sign in to confirm your age') || errMsg.includes('Video unavailable')) {
-          const customErr = new Error(`Video unavailable or restricted: ${errMsg}`);
-          (customErr as any).isNegative = true;
-          throw customErr;
-        }
-      }
-    }
-
-    throw new Error(`All yt-dlp clients failed. Last error: ${lastError?.message}`);
   }
 
   /**
@@ -147,7 +123,12 @@ export class YtDlpService {
       uploader: info.uploader,
       viewCount: info.view_count ? BigInt(info.view_count) : null,
       metadata,
-      formats: { video: videoFormats, audio: audioFormats }
+      formats: { video: videoFormats, audio: audioFormats },
+      url,
+      filename: `${(info.title || 'video').replace(/[^a-zA-Z0-9]/g, '_')}.mp4`,
+      isYtDlp: true,
+      contentType: 'video/mp4',
+      size: null
     };
   }
 }

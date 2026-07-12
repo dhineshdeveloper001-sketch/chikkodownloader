@@ -2,6 +2,7 @@ import { Router, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
 import prisma from '../prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { RateLimitMiddleware } from '../middleware/RateLimitMiddleware';
 
 const router = Router();
 
@@ -9,165 +10,128 @@ const router = Router();
 const requireAdmin = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.user?.id } });
-    if (!user || user.role !== 'admin') {
-      return res.status(403).json({ error: 'Security Exception: Administrator privileges required.' });
+    if (!user || user.role !== 'ADMIN') {
+      return res.status(403).json({ success: false, message: 'Forbidden' });
     }
     next();
   } catch (err: any) {
-    console.error('Admin Check Error:', process.env.NODE_ENV === 'production' ? err.message : err);
-    res.status(500).json({ error: 'Failed to verify permissions' });
+    console.error('Admin Check Error:', err.message);
+    res.status(500).json({ success: false, message: 'An internal error occurred' });
   }
 };
 
-const adminLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 50,
-  message: { error: 'Too many admin requests, please try again later.' }
-});
-
-router.use(authenticate, requireAdmin, adminLimiter);
+router.use(authenticate, requireAdmin, RateLimitMiddleware.adminLimiter);
 
 // Dashboard Overview
-router.get('/overview', async (req: AuthRequest, res) => {
+router.get('/dashboard', async (req: AuthRequest, res) => {
   try {
     const totalUsers = await prisma.user.count();
-    const totalDownloads = await prisma.download.count();
+    const totalDownloads = await prisma.downloadHistory.count();
     
-    const downloads = await prisma.download.findMany({
-      where: { status: 'completed' },
-      select: { file_size: true }
+    // Today's downloads
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const todaysDownloads = await prisma.downloadHistory.count({
+      where: { downloadTime: { gte: startOfToday } }
     });
-    const totalStorage = downloads.reduce((acc, curr) => acc + curr.file_size, BigInt(0));
+
+    const successfulDownloads = await prisma.downloadHistory.count({
+      where: { status: 'completed' }
+    });
+
+    const failedDownloads = await prisma.downloadHistory.count({
+      where: { status: 'error' }
+    });
+
+    // Top Platforms
+    const platformStats = await prisma.downloadHistory.groupBy({
+      by: ['platform'],
+      _count: { platform: true },
+      orderBy: { _count: { platform: 'desc' } },
+      take: 5
+    });
+
+    const recentDownloads = await prisma.downloadHistory.findMany({
+      orderBy: { downloadTime: 'desc' },
+      take: 10,
+      include: { user: { select: { username: true } } }
+    });
 
     res.json({
-      totalUsers,
-      totalDownloads,
-      totalStorage: totalStorage.toString(),
-      systemStatus: 'healthy'
-    });
-  } catch (err: any) {
-    console.error('Admin Overview Error:', process.env.NODE_ENV === 'production' ? err.message : err);
-    res.status(500).json({ error: 'Failed to fetch admin overview' });
-  }
-});
-
-// Audit Logs
-router.get('/audits', async (req: AuthRequest, res) => {
-  try {
-    const limit = parseInt((req.query.limit as string) || '50', 10);
-    const logs = await prisma.auditLog.findMany({
-      orderBy: { created_at: 'desc' },
-      take: limit,
-      include: {
-        user: { select: { email: true } }
+      success: true,
+      data: {
+        totalUsers,
+        totalDownloads,
+        todaysDownloads,
+        successfulDownloads,
+        failedDownloads,
+        topPlatforms: platformStats.map(p => ({ platform: p.platform, count: p._count.platform })),
+        recentDownloads: recentDownloads.map(d => ({
+          id: d.id,
+          username: d.user.username,
+          platform: d.platform,
+          title: d.title,
+          status: d.status,
+          time: d.downloadTime
+        }))
       }
     });
-
-    res.json({ logs });
   } catch (err: any) {
-    console.error('Admin Audits Error:', process.env.NODE_ENV === 'production' ? err.message : err);
-    res.status(500).json({ error: 'Failed to fetch audit logs' });
+    console.error('Admin Dashboard Error:', err.message);
+    res.status(500).json({ success: false, message: 'An internal error occurred' });
   }
 });
 
-router.delete('/audits/:id', async (req: AuthRequest, res) => {
-  try {
-    await prisma.auditLog.delete({ where: { id: req.params.id as string } });
-    res.json({ message: 'Audit log deleted successfully' });
-  } catch (err: any) {
-    console.error('Admin Delete Audit Error:', process.env.NODE_ENV === 'production' ? err.message : err);
-    res.status(500).json({ error: 'Failed to delete audit log' });
-  }
-});
-
-router.delete('/audits', async (req: AuthRequest, res) => {
-  try {
-    await prisma.auditLog.deleteMany({});
-    res.json({ message: 'All audit logs cleared successfully' });
-  } catch (err: any) {
-    console.error('Admin Clear Audits Error:', process.env.NODE_ENV === 'production' ? err.message : err);
-    res.status(500).json({ error: 'Failed to clear audit logs' });
-  }
-});
-
-// Users
+// Users Search
 router.get('/users', async (req: AuthRequest, res) => {
   try {
+    const search = req.query.search as string;
     const users = await prisma.user.findMany({
+      where: search ? { username: { contains: search, mode: 'insensitive' } } : {},
       select: {
         id: true,
-        name: true,
-        email: true,
+        username: true,
         role: true,
-        created_at: true,
+        isActive: true,
+        createdAt: true,
+        lastLogin: true,
         _count: { select: { downloads: true } }
       },
-      orderBy: { created_at: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: 50
     });
-    res.json({ users });
+    res.json({ success: true, users });
   } catch (err: any) {
-    console.error('Admin Users Error:', process.env.NODE_ENV === 'production' ? err.message : err);
-    res.status(500).json({ error: 'Failed to fetch users' });
+    console.error('Admin Users Error:', err.message);
+    res.status(500).json({ success: false, message: 'An internal error occurred' });
   }
 });
 
-router.delete('/users/:id', async (req: AuthRequest, res) => {
+router.put('/user/:id/deactivate', async (req: AuthRequest, res) => {
   try {
     const id = req.params.id as string;
-    // Prevent self-deletion
     if (id === req.user?.id) {
-      return res.status(400).json({ error: 'You cannot delete your own admin account.' });
+      return res.status(400).json({ success: false, message: 'Cannot deactivate yourself' });
     }
     
-    // Note: Due to Cascade delete on Download model, all associated downloads are deleted from DB automatically.
-    // However, physical files aren't wiped here. We can leave it as a known technical debt or implement a file wipe.
-    // For MVP, DB cascade is enough.
-    await prisma.user.delete({ where: { id } });
-    res.json({ message: 'User deleted successfully' });
-  } catch (err: any) {
-    console.error('Admin Delete User Error:', process.env.NODE_ENV === 'production' ? err.message : err);
-    res.status(500).json({ error: 'Failed to delete user' });
-  }
-});
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+       return res.status(404).json({ success: false, message: 'User not found' });
+    }
 
-// Downloads
-router.get('/downloads', async (req: AuthRequest, res) => {
-  try {
-    const limit = parseInt((req.query.limit as string) || '100', 10);
-    const downloads = await prisma.download.findMany({
-      orderBy: { download_date: 'desc' },
-      take: limit,
-      include: {
-        user: { select: { email: true } }
-      }
+    await prisma.user.update({
+      where: { id },
+      data: { isActive: !user.isActive }
     });
-    res.json({ downloads });
-  } catch (err: any) {
-    console.error('Admin Downloads Error:', process.env.NODE_ENV === 'production' ? err.message : err);
-    res.status(500).json({ error: 'Failed to fetch downloads' });
-  }
-});
 
-router.delete('/downloads/:id', async (req: AuthRequest, res) => {
-  try {
-    const id = req.params.id as string;
-    
-    // Attempt to delete physical file if it exists
-    const downloadRecord = await prisma.download.findUnique({ where: { id } });
-    if (downloadRecord) {
-      const fs = require('fs');
-      const path = require('path');
-      const filePath = path.join(process.cwd(), 'downloads', `${id}_${downloadRecord.file_name}`);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    }
+    await prisma.auditLog.create({
+      data: { userId: req.user?.id, action: 'ADMIN_DEACTIVATE_USER', details: `Toggled user ${user.username} active status to ${!user.isActive}` }
+    });
 
-    await prisma.download.delete({ where: { id } });
-    res.json({ message: 'Download log and file deleted successfully' });
+    res.json({ success: true, message: `User ${!user.isActive ? 'activated' : 'deactivated'} successfully` });
   } catch (err: any) {
-    console.error('Admin Delete Download Error:', process.env.NODE_ENV === 'production' ? err.message : err);
-    res.status(500).json({ error: 'Failed to delete download' });
+    console.error('Admin Deactivate User Error:', err.message);
+    res.status(500).json({ success: false, message: 'An internal error occurred' });
   }
 });
 

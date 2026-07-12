@@ -7,11 +7,10 @@ import { DownloadCloud, Mail, Lock, User, Loader2, ArrowRight, Eye, EyeOff } fro
 import toast from 'react-hot-toast';
 
 const Register = () => {
-  const { login } = useAuth();
   const navigate = useNavigate();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -19,12 +18,21 @@ const Register = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await axios.post(`${API_BASE}/api/auth/register`, { name, email, password });
-      login(res.data.token, res.data.user);
-      navigate('/');
-      toast.success('Registration successful! Welcome to Chikko Downloader.');
+      if (password !== confirmPassword) {
+        toast.error("Passwords do not match");
+        setLoading(false);
+        return;
+      }
+      await axios.post(`${API_BASE}/api/auth/signup`, { username, password, confirmPassword });
+      toast.success('Registration successful! Please login.');
+      navigate('/login');
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Registration failed');
+      const data = err.response?.data;
+      if (data?.details && Array.isArray(data.details)) {
+        toast.error(data.details[0].message);
+      } else {
+        toast.error(data?.error || data?.message || 'Registration failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -50,7 +58,7 @@ const Register = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-indigo-100 ml-1">Full Name</label>
+              <label className="text-sm font-semibold text-indigo-100 ml-1">Username</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <User className="h-5 w-5 text-indigo-300" />
@@ -59,26 +67,13 @@ const Register = () => {
                   type="text" 
                   required
                   className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 text-white rounded-2xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none transition-all placeholder:text-indigo-300/50 font-medium"
-                  placeholder="John Doe"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-indigo-100 ml-1">Email Address</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-indigo-300" />
-                </div>
-                <input 
-                  type="email" 
-                  required
-                  className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 text-white rounded-2xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none transition-all placeholder:text-indigo-300/50 font-medium"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Username (4-20 chars)"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  minLength={4}
+                  maxLength={20}
+                  pattern="[a-zA-Z0-9_]+"
+                  title="Only letters, numbers, and underscores allowed"
                 />
               </div>
             </div>
@@ -104,6 +99,26 @@ const Register = () => {
                 >
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
+              </div>
+              <p className="text-xs text-indigo-300/70 mt-1 ml-1">
+                Password must be at least 6 characters long.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold text-indigo-100 ml-1">Confirm Password</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-indigo-300" />
+                </div>
+                <input 
+                  type={showPassword ? "text" : "password"} 
+                  required
+                  className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 text-white rounded-2xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none transition-all placeholder:text-indigo-300/50 font-medium"
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
               </div>
             </div>
 

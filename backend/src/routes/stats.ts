@@ -15,8 +15,8 @@ router.get('/history', authenticate, async (req: AuthRequest, res) => {
     const cursor = req.query.cursor as string | undefined;
 
     const queryOptions: any = {
-      where: { user_id: req.user?.id },
-      orderBy: { download_date: 'desc' },
+      where: { userId: req.user?.id },
+      orderBy: { downloadTime: 'desc' },
       take: limit + 1, // Fetch one extra to determine if there's a next page
     };
 
@@ -24,7 +24,7 @@ router.get('/history', authenticate, async (req: AuthRequest, res) => {
       queryOptions.cursor = { id: cursor };
     }
 
-    const userDownloads = await prisma.download.findMany(queryOptions);
+    const userDownloads = await prisma.downloadHistory.findMany(queryOptions);
 
     let nextCursor: string | null = null;
     if (userDownloads.length > limit) {
@@ -34,54 +34,63 @@ router.get('/history', authenticate, async (req: AuthRequest, res) => {
 
     const history = userDownloads.map((d: any) => ({
       id: d.id,
-      url: d.original_url,
-      filename: d.file_name,
-      type: d.file_type,
-      size: d.file_size.toString(),
-      date: d.download_date,
+      url: d.url,
+      title: d.title,
+      platform: d.platform,
+      thumbnail: d.thumbnail,
+      date: d.downloadTime,
       status: d.status
     }));
 
-    res.json({ history, nextCursor });
+    res.json({ success: true, history, nextCursor });
   } catch (err: any) {
-    console.error('History API error:', process.env.NODE_ENV === 'production' ? err.message : err);
-    res.status(500).json({ error: 'Failed to fetch history' });
+    console.error('History API error:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to fetch history' });
+  }
+});
+
+router.delete('/history', authenticate, async (req: AuthRequest, res) => {
+  try {
+    await prisma.downloadHistory.deleteMany({
+      where: { userId: req.user?.id }
+    });
+    res.json({ success: true, message: 'History cleared' });
+  } catch(err: any) {
+    res.status(500).json({ success: false, message: 'Failed to clear history' });
   }
 });
 
 router.get('/dashboard', authenticate, async (req: AuthRequest, res) => {
   try {
-    const userDownloads = await prisma.download.findMany({
-      where: { user_id: req.user?.id }
+    const userDownloads = await prisma.downloadHistory.findMany({
+      where: { userId: req.user?.id }
     });
 
     const totalDownloads = userDownloads.length;
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const downloadsToday = userDownloads.filter(d => new Date(d.download_date) >= today).length;
+    const downloadsToday = userDownloads.filter(d => new Date(d.downloadTime) >= today).length;
 
-    let storageUsed = BigInt(0);
     const fileTypes: Record<string, number> = {};
 
     userDownloads.forEach(d => {
       if (d.status === 'completed') {
-        storageUsed += d.file_size;
-        const mainType = d.file_type.split('/')[0] || 'other';
-        fileTypes[mainType] = (fileTypes[mainType] || 0) + 1;
+        fileTypes[d.platform] = (fileTypes[d.platform] || 0) + 1;
       }
     });
 
     res.json({
+      success: true,
       totalDownloads,
       downloadsToday,
-      storageUsed: storageUsed.toString(),
+      storageUsed: 0, // removed size from db to keep it simple, we can return 0
       fileTypes
     });
 
   } catch (err: any) {
-    console.error('Dashboard API error:', process.env.NODE_ENV === 'production' ? err.message : err);
-    res.status(500).json({ error: 'Failed to fetch dashboard stats' });
+    console.error('Dashboard API error:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to fetch dashboard stats' });
   }
 });
 

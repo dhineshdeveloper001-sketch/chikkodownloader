@@ -18,20 +18,23 @@ export const validate = (schema: z.ZodSchema) => {
   };
 };
 
-// Schemas
 export const registerSchema = z.object({
-  name: z.string().min(2).max(50),
-  email: z.string().email(),
-  password: z.string().min(6).max(100)
+  username: z.string().regex(/^[a-zA-Z0-9_]{4,20}$/, 'Username must be 4-20 characters long and can only contain letters, numbers, and underscores'),
+  password: z.string().min(6, 'Password must be at least 6 characters long'),
+  confirmPassword: z.string()
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"]
 });
 
 export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string()
+  username: z.string().min(1),
+  password: z.string().min(1)
 });
 
 export const mediaMetadataSchema = z.object({
-  url: z.string().url()
+  url: z.string().url(),
+  quality: z.string().optional()
 });
 
 export const mediaDownloadSchema = z.object({
@@ -41,12 +44,15 @@ export const mediaDownloadSchema = z.object({
   contentType: z.string().min(1),
   isYtDlp: z.boolean(),
   formatId: z.string().nullable().optional(),
-  downloadType: z.enum(['video', 'audio']).optional()
+  downloadType: z.enum(['video', 'audio']).optional(),
+  platform: z.string().min(1),
+  title: z.string().min(1),
+  thumbnail: z.string().nullable().optional()
 });
 
 // SSRF Protection Middleware
 export const preventSSRF = async (req: Request, res: Response, next: NextFunction) => {
-  const { url } = req.body;
+  const url = req.body?.url || req.query?.url;
   if (!url) return next();
 
   try {

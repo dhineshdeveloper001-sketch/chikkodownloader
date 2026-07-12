@@ -1,19 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Search, File, Download, Calendar, HardDrive, ArrowRight, Loader2 } from 'lucide-react';
+import { Search, File, Download, Calendar, ArrowRight, Loader2, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import clsx from 'clsx';
 import { API_BASE } from '../config';
-
-const formatBytes = (bytes: number | string, decimals = 2) => {
-  const numBytes = Number(bytes);
-  if (!numBytes) return '0 Bytes';
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(numBytes) / Math.log(k));
-  return `${parseFloat((numBytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
-};
+import toast from 'react-hot-toast';
 
 const History = () => {
   const [history, setHistory] = useState<any[]>([]);
@@ -21,7 +12,6 @@ const History = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const { token } = useAuth();
 
   const fetchHistory = async (cursor?: string) => {
     try {
@@ -29,14 +19,15 @@ const History = () => {
         ? `${API_BASE}/api/stats/history?limit=20&cursor=${cursor}`
         : `${API_BASE}/api/stats/history?limit=20`;
         
-      const res = await axios.get(url);
-      
-      if (cursor) {
-        setHistory(prev => [...prev, ...res.data.history]);
-      } else {
-        setHistory(res.data.history);
+      const res = await axios.get(url, { withCredentials: true });
+      if (res.data.success) {
+        if (cursor) {
+          setHistory(prev => [...prev, ...res.data.history]);
+        } else {
+          setHistory(res.data.history);
+        }
+        setNextCursor(res.data.nextCursor);
       }
-      setNextCursor(res.data.nextCursor);
     } catch (err) {
       console.error('Failed to fetch history');
     } finally {
@@ -56,9 +47,21 @@ const History = () => {
     }
   };
 
+  const handleClearHistory = async () => {
+    if (!window.confirm("Are you sure you want to clear your entire download history?")) return;
+    
+    try {
+      await axios.delete(`${API_BASE}/api/stats/history`, { withCredentials: true });
+      setHistory([]);
+      toast.success("History cleared");
+    } catch (err) {
+      toast.error("Failed to clear history");
+    }
+  };
+
   const filteredHistory = history.filter(item => 
-    (item.filename || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (item.url || '').toLowerCase().includes(searchQuery.toLowerCase())
+    (item.title || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+    (item.platform || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -69,18 +72,28 @@ const History = () => {
           <p className="text-lg text-slate-500 dark:text-slate-400 mt-3 font-medium">Browse and search your past downloads securely.</p>
         </div>
         
-        <div className="relative w-full md:w-80 group">
-          <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl blur opacity-10 group-hover:opacity-30 transition-opacity duration-500"></div>
-          <div className="relative flex items-center bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-white/40 dark:border-slate-700/50 rounded-2xl shadow-xl shadow-indigo-500/5">
-            <Search size={20} className="text-indigo-400 dark:text-indigo-500 ml-4" />
-            <input 
-              type="text" 
-              className="w-full bg-transparent border-none text-slate-800 dark:text-white px-4 py-4 rounded-2xl focus:ring-0 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 font-medium"
-              placeholder="Search files..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+        <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+          <div className="relative w-full sm:w-80 group">
+            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl blur opacity-10 group-hover:opacity-30 transition-opacity duration-500"></div>
+            <div className="relative flex items-center bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-white/40 dark:border-slate-700/50 rounded-2xl shadow-xl shadow-indigo-500/5">
+              <Search size={20} className="text-indigo-400 dark:text-indigo-500 ml-4" />
+              <input 
+                type="text" 
+                className="w-full bg-transparent border-none text-slate-800 dark:text-white px-4 py-4 rounded-2xl focus:ring-0 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 font-medium"
+                placeholder="Search history..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
           </div>
+          
+          <button 
+            onClick={handleClearHistory}
+            className="flex-shrink-0 bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400 px-6 py-4 rounded-2xl font-bold border border-red-100 dark:border-red-500/20 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
+          >
+            <Trash2 size={20} />
+            Clear
+          </button>
         </div>
       </div>
 
@@ -100,8 +113,15 @@ const History = () => {
           {filteredHistory.map((item) => (
             <div key={item.id} className="group relative bg-white/60 dark:bg-slate-800/40 backdrop-blur-xl rounded-3xl p-6 border border-white/40 dark:border-slate-700/50 hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-300 flex flex-col">
               <div className="flex items-start justify-between mb-4">
-                <div className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 p-3 rounded-2xl">
-                  <File size={24} />
+                <div className="flex items-center gap-3">
+                   {item.thumbnail ? (
+                     <img src={item.thumbnail} alt="Thumbnail" className="w-12 h-12 object-cover rounded-xl" />
+                   ) : (
+                     <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center">
+                       <File size={20} />
+                     </div>
+                   )}
+                   <span className="font-bold text-slate-600 dark:text-slate-300 uppercase text-xs">{item.platform}</span>
                 </div>
                 <span className={clsx(
                   "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider",
@@ -113,9 +133,9 @@ const History = () => {
                 </span>
               </div>
 
-              <div className="flex-1">
-                <h4 className="text-lg font-black text-slate-800 dark:text-white line-clamp-2 leading-tight mb-4" title={item.filename}>
-                  {item.filename}
+              <div className="flex-1 mt-2">
+                <h4 className="text-lg font-black text-slate-800 dark:text-white line-clamp-2 leading-tight mb-4" title={item.title}>
+                  {item.title || 'Untitled Download'}
                 </h4>
 
                 <div className="space-y-2 mb-6">
@@ -123,16 +143,12 @@ const History = () => {
                     <Calendar size={16} />
                     {new Date(item.date).toLocaleDateString()}
                   </div>
-                  <div className="flex items-center text-sm font-medium text-slate-500 dark:text-slate-400 gap-2">
-                    <HardDrive size={16} />
-                    {formatBytes(item.size)} • {item.type.split('/')[0]}
-                  </div>
                 </div>
               </div>
 
               {item.status === 'completed' ? (
                 <a 
-                  href={`${API_BASE}/api/media/serve/${item.id}?token=${token}`} 
+                  href={`${API_BASE}/api/media/serve/${item.id}`} 
                   download 
                   target="_blank"
                   rel="noreferrer"
