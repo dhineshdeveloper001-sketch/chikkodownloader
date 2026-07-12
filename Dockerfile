@@ -1,7 +1,7 @@
 # ==========================================
 # STAGE 1: Build the React Frontend
 # ==========================================
-FROM node:18-slim AS frontend-builder
+FROM node:22-slim AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm install
@@ -11,7 +11,7 @@ RUN npm run build
 # ==========================================
 # STAGE 2: Setup the Unified Backend Production Container
 # ==========================================
-FROM node:18-slim
+FROM node:22-slim
 
 # 1. Install system dependencies (FFmpeg & Python for yt-dlp)
 RUN apt-get update && apt-get install -y \
