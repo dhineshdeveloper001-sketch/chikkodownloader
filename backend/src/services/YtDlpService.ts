@@ -73,8 +73,8 @@ export class YtDlpService {
       }
       const errorMessage = `${err.message || ''} ${err.stderr || ''} ${err.stdout || ''}`;
       
-      // FALLBACK ROUTE: Intercept bot blocks and route to Cobalt API Mirror
-      if (errorMessage.includes('Sign in to confirm') || errorMessage.includes('bot') || errorMessage.includes('429') || errorMessage.includes('Command failed')) {
+      // FALLBACK ROUTE: Intercept ALL failures and route to Cobalt API Mirror
+      console.warn(`[YtDlpService] Primary extraction caught an exception. Deploying bulletproof Cobalt Fallback Mirror for ${url}`);
         console.warn(`[YtDlpService] YouTube Bot-Block Detected! Engaging Cobalt Fallback Mirror for ${url}`);
         try {
           const cobaltRes = await axios.post('https://api.cobalt.tools/', {
@@ -122,8 +122,6 @@ export class YtDlpService {
         } catch (cobaltErr: any) {
           console.error(`[YtDlpService] Cobalt Fallback also failed: ${cobaltErr.message}`);
         }
-      }
-
       throw err;
     }
   }
