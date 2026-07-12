@@ -30,10 +30,14 @@ WORKDIR /app/backend
 COPY backend/package*.json ./
 RUN npm install
 
-# 4. Copy backend source code
+# 4. Copy backend source code and generate Prisma schema
 COPY backend/ ./
+RUN npx prisma generate
 
-# 5. Bring over the compiled static React files from Stage 1 into the backend
+# 5. Compile TypeScript backend
+RUN npm run build
+
+# 6. Bring over the compiled static React files from Stage 1 into the backend
 COPY --from=frontend-builder /app/frontend/dist ./public
 
 # 6. Render dynamically provisions a port, usually 10000

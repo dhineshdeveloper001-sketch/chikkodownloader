@@ -41,7 +41,7 @@ export class MediaController {
       }
 
       // 3. Trigger our Extraction cluster loop / Fresh Data Fetch
-      const freshData = await extractor.extractMetadata(url, targetResolution);
+      const freshData = await extractor.extractMetadata(url);
 
       // Save to PostgreSQL Cache
       await CacheService.saveCache(mediaId, freshData);
