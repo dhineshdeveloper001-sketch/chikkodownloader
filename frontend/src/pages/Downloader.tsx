@@ -49,7 +49,7 @@ const Downloader = () => {
       resolution: resolution
     });
     
-    const fileUrl = `/api/media/download?${queryParams.toString()}`;
+    const fileUrl = `${API_BASE}/api/media/download?${queryParams.toString()}`;
     
     // Programmatic Virtual Anchor Trigger (Zero RAM footprint)
     const a = document.createElement('a');

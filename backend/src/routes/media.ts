@@ -86,51 +86,82 @@ router.get('/download', authenticate, RateLimitMiddleware.downloadLimiter, preve
         }
       }
 
-      const ytArgs = [
-        '-f', ytFormat,
-        '-o', '-',
-        '--no-warnings',
-        '--geo-bypass',
-        '--force-ipv4'
-      ];
-
-      // FFmpeg dynamic multiplexing for adaptive tracks via stdout
-      if (isHighRes || ytFormat.includes('+')) {
-        ytArgs.push(
-          '--ffmpeg-location', 'ffmpeg',
-          '--merge-output-format', 'mp4',
-          '--postprocessor-args', 'ffmpeg:-movflags frag_keyframe+empty_moov'
-        );
-      }
-      
       const cookiesPath = path.join(process.cwd(), 'cookies.txt');
-      if (fs.existsSync(cookiesPath) && fs.statSync(cookiesPath).size > 10) {
-        ytArgs.push('--cookies', cookiesPath);
-      }
+      const hasCookies = fs.existsSync(cookiesPath) && fs.statSync(cookiesPath).size > 10;
+      const ytDlpCmd = require('../services/YtDlpService').ytDlpCmd;
 
-      ytArgs.push(url as string);
-      
-      const subprocess = spawn(require('../services/YtDlpService').ytDlpCmd, ytArgs);
+      if (isHighRes || ytFormat.includes('+')) {
+        // High Res Zero-Disk Multiplexing Strategy using native FFmpeg Pipes
+        // yt-dlp cannot concurrently stream two files to stdout, so we extract URLs and use ffmpeg
+        const gArgs = ['-f', ytFormat, '-g', '--no-warnings', '--geo-bypass', '--force-ipv4'];
+        if (hasCookies) gArgs.push('--cookies', cookiesPath);
+        gArgs.push(url as string);
 
-      subprocess.stdout.pipe(res);
+        try {
+          const { stdout: urlsStdout } = await execFileAsync(ytDlpCmd, gArgs, { timeout: 30000 });
+          const urls = urlsStdout.trim().split('\n').filter(u => u.startsWith('http'));
+          
+          if (urls.length === 0) throw new Error('No stream URLs found');
 
-      subprocess.on('error', async (err) => {
-        console.error('yt-dlp Spawn Error:', err.message || err);
-        if (!res.headersSent) {
-          res.status(500).end('Stream failed');
-        } else {
-          res.end();
+          const ffmpegArgs = [];
+          for (const u of urls) {
+             ffmpegArgs.push('-i', u);
+          }
+          ffmpegArgs.push(
+             '-c', 'copy',
+             '-movflags', 'frag_keyframe+empty_moov',
+             '-f', 'mp4',
+             'pipe:1'
+          );
+
+          const ffmpegPath = require('ffmpeg-static') || 'ffmpeg';
+          const subprocess = spawn(ffmpegPath, ffmpegArgs);
+          subprocess.stdout.pipe(res);
+
+          subprocess.on('error', async (err) => {
+            console.error('FFmpeg Spawn Error:', err.message || err);
+            if (!res.headersSent) res.status(500).end('Stream failed');
+            else res.end();
+            await prisma.downloadHistory.update({
+              where: { id: downloadRecord.id },
+              data: { status: 'error' }
+            }).catch(console.error);
+          });
+          
+        } catch (err: any) {
+          console.error('yt-dlp URL Extraction Error:', err.message);
+          if (!res.headersSent) res.status(500).json({ success: false, message: 'Stream extraction failed' });
+          await prisma.downloadHistory.update({
+            where: { id: downloadRecord.id },
+            data: { status: 'error' }
+          }).catch(console.error);
         }
-        await prisma.downloadHistory.update({
-          where: { id: downloadRecord.id },
-          data: { status: 'error' }
-        }).catch(console.error);
-      });
-      
-      subprocess.stderr.on('data', (data: any) => {
-        // Detailed logging for debug
-        // console.log('yt-dlp (stderr):', data.toString());
-      });
+
+      } else {
+        // Standard single-stream pipe for 720p or audio
+        const ytArgs = [
+          '-f', ytFormat,
+          '-o', '-',
+          '--no-warnings',
+          '--geo-bypass',
+          '--force-ipv4'
+        ];
+        if (hasCookies) ytArgs.push('--cookies', cookiesPath);
+        ytArgs.push(url as string);
+        
+        const subprocess = spawn(ytDlpCmd, ytArgs);
+        subprocess.stdout.pipe(res);
+
+        subprocess.on('error', async (err) => {
+          console.error('yt-dlp Spawn Error:', err.message || err);
+          if (!res.headersSent) res.status(500).end('Stream failed');
+          else res.end();
+          await prisma.downloadHistory.update({
+            where: { id: downloadRecord.id },
+            data: { status: 'error' }
+          }).catch(console.error);
+        });
+      }
 
     } else {
       // Direct stream pipe from CDN if not yt-dlp native
