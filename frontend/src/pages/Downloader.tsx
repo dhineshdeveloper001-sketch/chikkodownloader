@@ -43,7 +43,7 @@ const Downloader = () => {
     
     // Construct Direct Stream Download Query
     const queryParams = new URLSearchParams({
-      url: metadata?.url || url,
+      url: url,
       platform: 'youtube',
       title: metadata?.title || 'YouTube_Video',
       resolution: resolution

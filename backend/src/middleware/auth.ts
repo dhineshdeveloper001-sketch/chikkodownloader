@@ -22,7 +22,8 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
   }
 
   if (!token) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
+    console.error('[Auth Middleware] Rejected: Missing JWT token.');
+    return res.status(401).json({ success: false, message: 'Unauthorized', error: 'Missing JWT token', stack: 'development only' });
   }
 
   try {
@@ -31,7 +32,8 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
     
     // Check if decoded contains the new payload structure
     if (!decoded.userId) {
-       return res.status(401).json({ success: false, message: 'Unauthorized' });
+       console.error('[Auth Middleware] Rejected: Invalid JWT payload structure (missing userId).');
+       return res.status(401).json({ success: false, message: 'Unauthorized', error: 'Invalid JWT payload structure', stack: 'development only' });
     }
 
     req.user = { 
@@ -40,7 +42,8 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
       role: decoded.role
     };
     next();
-  } catch (err) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  } catch (err: any) {
+    console.error('[Auth Middleware] Rejected: JWT Verification Failed.', err.message);
+    return res.status(401).json({ success: false, message: 'Unauthorized', error: err.message, stack: err.stack });
   }
 };

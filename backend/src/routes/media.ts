@@ -30,7 +30,15 @@ router.post('/metadata', authenticate, RateLimitMiddleware.metadataLimiter, vali
 router.get('/download', authenticate, RateLimitMiddleware.downloadLimiter, preventSSRF, async (req: AuthRequest, res) => {
   const { url, resolution, platform, title, formatId } = req.query;
   const userId = req.user?.id;
-  if (!userId || !url) return res.status(401).json({ success: false, message: 'Unauthorized or Missing URL' });
+  console.log("\n=== Incoming download request ===");
+  console.log("Method:", req.method);
+  console.log("URL:", req.url);
+  console.log("Query Parameters:", req.query);
+
+  if (!userId || !url) {
+    console.error("[Media Route] Rejected: Missing UserID or URL");
+    return res.status(401).json({ success: false, message: 'Unauthorized or Missing URL', error: 'Missing parameters', stack: 'development only' });
+  }
 
   try {
     const cleanTitle = (title as string || 'chikko_media').replace(/[^a-zA-Z0-9]/g, '_');
@@ -97,11 +105,12 @@ router.get('/download', authenticate, RateLimitMiddleware.downloadLimiter, preve
         if (hasCookies) gArgs.push('--cookies', cookiesPath);
         gArgs.push(url as string);
 
+        console.log("[Media Route] Executing yt-dlp -g command:", ytDlpCmd, gArgs.join(' '));
         try {
           const { stdout: urlsStdout } = await execFileAsync(ytDlpCmd, gArgs, { timeout: 30000 });
           const urls = urlsStdout.trim().split('\n').filter(u => u.startsWith('http'));
           
-          if (urls.length === 0) throw new Error('No stream URLs found');
+          if (urls.length === 0) throw new Error('No stream URLs found in yt-dlp output');
 
           const ffmpegArgs = [];
           for (const u of urls) {
@@ -115,12 +124,13 @@ router.get('/download', authenticate, RateLimitMiddleware.downloadLimiter, preve
           );
 
           const ffmpegPath = require('ffmpeg-static') || 'ffmpeg';
+          console.log("[Media Route] Spawning ffmpeg pipeline:", ffmpegPath, ffmpegArgs.join(' '));
           const subprocess = spawn(ffmpegPath, ffmpegArgs);
           subprocess.stdout.pipe(res);
 
-          subprocess.on('error', async (err) => {
-            console.error('FFmpeg Spawn Error:', err.message || err);
-            if (!res.headersSent) res.status(500).end('Stream failed');
+          subprocess.on('error', async (err: any) => {
+            console.error('[Media Route] FFmpeg Spawn Error Stack Trace:', err.stack || err);
+            if (!res.headersSent) res.status(500).json({ success: false, message: 'Stream failed', error: err.message, stack: err.stack });
             else res.end();
             await prisma.downloadHistory.update({
               where: { id: downloadRecord.id },
@@ -129,8 +139,8 @@ router.get('/download', authenticate, RateLimitMiddleware.downloadLimiter, preve
           });
           
         } catch (err: any) {
-          console.error('yt-dlp URL Extraction Error:', err.message);
-          if (!res.headersSent) res.status(500).json({ success: false, message: 'Stream extraction failed' });
+          console.error('[Media Route] yt-dlp URL Extraction Error Stack Trace:', err.stack || err);
+          if (!res.headersSent) res.status(500).json({ success: false, message: 'Stream extraction failed', error: err.message, stack: err.stack });
           await prisma.downloadHistory.update({
             where: { id: downloadRecord.id },
             data: { status: 'error' }
@@ -148,13 +158,13 @@ router.get('/download', authenticate, RateLimitMiddleware.downloadLimiter, preve
         ];
         if (hasCookies) ytArgs.push('--cookies', cookiesPath);
         ytArgs.push(url as string);
-        
+        console.log("[Media Route] Spawning yt-dlp single-stream:", ytDlpCmd, ytArgs.join(' '));
         const subprocess = spawn(ytDlpCmd, ytArgs);
         subprocess.stdout.pipe(res);
 
-        subprocess.on('error', async (err) => {
-          console.error('yt-dlp Spawn Error:', err.message || err);
-          if (!res.headersSent) res.status(500).end('Stream failed');
+        subprocess.on('error', async (err: any) => {
+          console.error('[Media Route] yt-dlp Spawn Error Stack Trace:', err.stack || err);
+          if (!res.headersSent) res.status(500).json({ success: false, message: 'Stream failed', error: err.message, stack: err.stack });
           else res.end();
           await prisma.downloadHistory.update({
             where: { id: downloadRecord.id },

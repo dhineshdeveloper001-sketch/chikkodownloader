@@ -108,6 +108,14 @@ const globalLimiter = rateLimit({
 });
 app.use(globalLimiter);
 
+// Global Request Logger
+app.use((req, res, next) => {
+  console.log(`\n[INCOMING REQUEST] ${req.method} ${req.url}`);
+  console.log(`[REQUEST BODY]`, req.body);
+  console.log(`[REQUEST QUERY]`, req.query);
+  next();
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/media', mediaRoutes);
@@ -115,7 +123,7 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/health', healthRoutes);
 
-app.get('/health', async (req, res) => {
+app.get('/api/health', async (req, res) => {
   try {
     // Check DB
     await prisma.$queryRaw`SELECT 1`;
@@ -123,7 +131,7 @@ app.get('/health', async (req, res) => {
     await execFileAsync(ytDlpCmd, ['--version']);
     
     res.json({
-      success: true,
+      status: 'ok',
       database: 'connected',
       ytdlp: 'available'
     });
@@ -176,8 +184,8 @@ async function startServer() {
     process.exit(1);
   }
 
-  const server = app.listen(PORT, () => {
-    console.log(`[BOOT] Server Listening on port ${PORT}`);
+  const server = app.listen(Number(PORT), '0.0.0.0', () => {
+    console.log(`[BOOT] Server Listening on port ${PORT} at 0.0.0.0`);
   });
 
   // Graceful Shutdown Handlers

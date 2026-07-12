@@ -62,18 +62,21 @@ export const preventSSRF = async (req: Request, res: Response, next: NextFunctio
     // Resolve hostname to IP using OS native lookup
     const { address } = await dns.lookup(hostname);
     if (!address) {
-      return res.status(400).json({ error: 'Invalid URL hostname' });
+      console.error(`[SSRF Middleware] Rejected: Invalid URL hostname (${hostname}).`);
+      return res.status(400).json({ success: false, message: 'Invalid URL hostname', error: 'DNS resolution failed', stack: 'development only' });
     }
 
     const addr = ipaddr.parse(address);
 
     // Only allow public unicast IPs
     if (addr.range() !== 'unicast') {
-      return res.status(403).json({ error: 'Security Exception: Cannot access internal networks (SSRF Blocked)' });
+      console.error(`[SSRF Middleware] Rejected: Internal network access blocked (${address}).`);
+      return res.status(403).json({ success: false, message: 'Security Exception', error: 'Cannot access internal networks', stack: 'development only' });
     }
     
     next();
-  } catch (err) {
-    return res.status(400).json({ error: 'Failed to resolve URL (SSRF Blocked)' });
+  } catch (err: any) {
+    console.error(`[SSRF Middleware] Rejected: Exception resolving URL.`, err.message);
+    return res.status(400).json({ success: false, message: 'Failed to resolve URL', error: err.message, stack: err.stack });
   }
 };

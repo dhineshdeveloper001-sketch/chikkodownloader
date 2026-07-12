@@ -60,6 +60,11 @@ export class YtDlpService {
       const data = JSON.parse(stdout);
       return this.parseResponse(url, data);
     } catch (err: any) {
+      console.error(`\n[YtDlpService] EXECUTION FAILED for URL: ${url}`);
+      console.error(`[YtDlpService] Exit Code: ${err.code}`);
+      console.error(`[YtDlpService] STDERR:`, err.stderr);
+      console.error(`[YtDlpService] STDOUT:`, err.stdout);
+
       if (err.killed && err.signal === 'SIGTERM') {
         throw new Error(`yt-dlp timed out after ${YTDLP_TIMEOUT}ms`);
       }
