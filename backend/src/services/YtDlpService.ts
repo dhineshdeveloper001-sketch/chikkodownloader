@@ -52,6 +52,7 @@ export class YtDlpService {
     );
 
     console.log(`[YtDlpService] Fetching metadata for ${url}`);
+    console.log(`[YtDlpService] Exact command: ${ytDlpCmd} ${args.join(' ')}`);
     try {
       const { stdout } = await execFileAsync(ytDlpCmd, args, {
         maxBuffer: 20 * 1024 * 1024,
