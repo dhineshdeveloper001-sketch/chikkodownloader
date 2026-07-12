@@ -97,7 +97,7 @@ router.get('/download', authenticate, RateLimitMiddleware.downloadLimiter, preve
       // FFmpeg dynamic multiplexing for adaptive tracks via stdout
       if (isHighRes || ytFormat.includes('+')) {
         ytArgs.push(
-          '--ffmpeg-location', ffmpegPath,
+          '--ffmpeg-location', 'ffmpeg',
           '--merge-output-format', 'mp4',
           '--postprocessor-args', 'ffmpeg:-movflags frag_keyframe+empty_moov'
         );

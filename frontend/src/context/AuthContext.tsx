@@ -47,13 +47,13 @@ axios.interceptors.response.use(
   }
 );
 
-interface User {
+export interface User {
   id: string;
   username: string;
   role: string;
 }
 
-interface AuthContextType {
+export interface AuthContextType {
   user: User | null;
   login: (user: User) => void;
   logout: () => Promise<void>;

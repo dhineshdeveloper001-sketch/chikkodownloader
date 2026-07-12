@@ -17,7 +17,7 @@ const formatBytes = (bytes: number | string, decimals = 2) => {
 const Dashboard = () => {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const { token } = useAuth();
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -33,7 +33,7 @@ const Dashboard = () => {
       }
     };
     fetchStats();
-  }, [token]);
+  }, [user]);
 
   if (loading) {
     return (

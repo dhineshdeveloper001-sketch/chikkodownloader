@@ -77,8 +77,8 @@ const Layout = () => {
           <div className="flex items-center justify-between mb-4">
             <div className="flex flex-col">
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Logged in as</span>
-              <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate w-32" title={user?.name}>
-                {user?.name}
+              <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate w-32" title={user?.username}>
+                {user?.username}
               </span>
             </div>
             <button onClick={toggleTheme} className="p-2.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors">
@@ -99,8 +99,8 @@ const Layout = () => {
             <div className="flex-1 space-y-6 mt-4">
               <div className="flex flex-col">
                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Account</span>
-                <span className="text-base font-bold text-slate-800 dark:text-white truncate">{user?.name}</span>
-                <span className="text-sm text-slate-500 truncate">{user?.email}</span>
+                <span className="text-base font-bold text-slate-800 dark:text-white truncate">{user?.username}</span>
+                <span className="text-sm text-slate-500 truncate uppercase">{user?.role}</span>
               </div>
               
               <button onClick={logout} className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 rounded-xl transition-all">

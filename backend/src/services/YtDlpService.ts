@@ -7,9 +7,16 @@ const execFileAsync = util.promisify(execFile);
 
 // Resolve yt-dlp path
 export let ytDlpCmd = process.env.YTDLP_PATH || 'yt-dlp';
+
+// Force strip .exe on Linux to prevent copied .env files from breaking the Docker build
+if (process.platform !== 'win32' && ytDlpCmd.endsWith('.exe')) {
+  ytDlpCmd = ytDlpCmd.replace('.exe', '');
+}
+
 const possiblePaths = [
   path.join(process.cwd(), 'yt-dlp'),
   process.env.HOME ? path.join(process.env.HOME, '.local/bin/yt-dlp') : null,
+  '/usr/local/bin/yt-dlp', // Docker installation path
   '/opt/render/project/src/.venv/bin/yt-dlp',
   '/opt/render/project/.local/bin/yt-dlp'
 ].filter(Boolean) as string[];
