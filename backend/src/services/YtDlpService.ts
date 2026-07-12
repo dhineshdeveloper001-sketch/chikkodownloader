@@ -71,13 +71,13 @@ export class YtDlpService {
       if (err.killed && err.signal === 'SIGTERM') {
         throw new Error(`yt-dlp timed out after ${YTDLP_TIMEOUT}ms`);
       }
-      const errString = err.message || err.stderr || err;
+      const errorMessage = `${err.message || ''} ${err.stderr || ''} ${err.stdout || ''}`;
       
       // FALLBACK ROUTE: Intercept bot blocks and route to Cobalt API Mirror
-      if (typeof errString === 'string' && (errString.includes('Sign in to confirm') || errString.includes('bot') || errString.includes('429'))) {
+      if (errorMessage.includes('Sign in to confirm') || errorMessage.includes('bot') || errorMessage.includes('429') || errorMessage.includes('Command failed')) {
         console.warn(`[YtDlpService] YouTube Bot-Block Detected! Engaging Cobalt Fallback Mirror for ${url}`);
         try {
-          const cobaltRes = await axios.post('https://api.cobalt.tools/api/json', {
+          const cobaltRes = await axios.post('https://api.cobalt.tools/', {
             url: url,
             videoQuality: '720',
             downloadMode: 'auto'
@@ -86,20 +86,16 @@ export class YtDlpService {
               'Accept': 'application/json',
               'Content-Type': 'application/json'
             },
-            timeout: 15000
+            timeout: 9000
           });
 
           // Map Cobalt output directly into our expected Chikko format
           if (cobaltRes.data && cobaltRes.data.url) {
             console.log(`[YtDlpService] Cobalt Fallback SUCCESS for ${url}`);
             
-            // Generate a synthetic video ID or use hash
-            const crypto = require('crypto');
-            const vId = crypto.createHash('md5').update(url).digest('hex').substring(0, 11);
-
             return {
-              title: cobaltRes.data.title || "External Video Source",
-              thumbnail: cobaltRes.data.thumbnail || null,
+              title: "Chikko Bypassed Stream",
+              thumbnail: "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=500",
               duration: 0,
               uploader: "External Mirror",
               viewCount: null,
@@ -128,7 +124,7 @@ export class YtDlpService {
         }
       }
 
-      throw new Error(`yt-dlp error: ${errString}`);
+      throw err;
     }
   }
 
