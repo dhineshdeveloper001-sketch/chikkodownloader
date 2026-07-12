@@ -2,6 +2,7 @@ import { execFile } from 'child_process';
 import util from 'util';
 import path from 'path';
 import fs from 'fs';
+import axios from 'axios';
 
 const execFileAsync = util.promisify(execFile);
 
@@ -48,6 +49,7 @@ export class YtDlpService {
 
     args.push(
       '--geo-bypass',
+      '--extractor-args', 'youtube:player-client=ios,web_embedded',
       url
     );
 
@@ -69,7 +71,64 @@ export class YtDlpService {
       if (err.killed && err.signal === 'SIGTERM') {
         throw new Error(`yt-dlp timed out after ${YTDLP_TIMEOUT}ms`);
       }
-      throw new Error(`yt-dlp error: ${err.message || err.stderr || err}`);
+      const errString = err.message || err.stderr || err;
+      
+      // FALLBACK ROUTE: Intercept bot blocks and route to Cobalt API Mirror
+      if (typeof errString === 'string' && (errString.includes('Sign in to confirm') || errString.includes('bot') || errString.includes('429'))) {
+        console.warn(`[YtDlpService] YouTube Bot-Block Detected! Engaging Cobalt Fallback Mirror for ${url}`);
+        try {
+          const cobaltRes = await axios.post('https://api.cobalt.tools/api/json', {
+            url: url,
+            videoQuality: '720',
+            downloadMode: 'auto'
+          }, {
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            },
+            timeout: 15000
+          });
+
+          // Map Cobalt output directly into our expected Chikko format
+          if (cobaltRes.data && cobaltRes.data.url) {
+            console.log(`[YtDlpService] Cobalt Fallback SUCCESS for ${url}`);
+            
+            // Generate a synthetic video ID or use hash
+            const crypto = require('crypto');
+            const vId = crypto.createHash('md5').update(url).digest('hex').substring(0, 11);
+
+            return {
+              title: cobaltRes.data.title || "External Video Source",
+              thumbnail: cobaltRes.data.thumbnail || null,
+              duration: 0,
+              uploader: "External Mirror",
+              viewCount: null,
+              formats: {
+                audio: [],
+                video: [
+                  {
+                    ext: 'mp4',
+                    fps: 30,
+                    size: null,
+                    height: 720,
+                    formatId: 'cobalt-fallback',
+                    resolution: '720p',
+                    url: cobaltRes.data.url
+                  }
+                ]
+              },
+              metadata: {
+                url: url,
+                extractor: "cobalt-fallback"
+              }
+            };
+          }
+        } catch (cobaltErr: any) {
+          console.error(`[YtDlpService] Cobalt Fallback also failed: ${cobaltErr.message}`);
+        }
+      }
+
+      throw new Error(`yt-dlp error: ${errString}`);
     }
   }
 

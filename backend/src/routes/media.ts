@@ -101,7 +101,7 @@ router.get('/download', authenticate, RateLimitMiddleware.downloadLimiter, preve
       if (isHighRes || ytFormat.includes('+')) {
         // High Res Zero-Disk Multiplexing Strategy using native FFmpeg Pipes
         // yt-dlp cannot concurrently stream two files to stdout, so we extract URLs and use ffmpeg
-        const jArgs = ['-f', ytFormat, '-J', '--no-warnings', '--geo-bypass', '--force-ipv4'];
+        const jArgs = ['-f', ytFormat, '-J', '--no-warnings', '--geo-bypass', '--force-ipv4', '--extractor-args', 'youtube:player-client=ios,web_embedded'];
         if (hasCookies) jArgs.push('--cookies', cookiesPath);
         jArgs.push(url as string);
 
@@ -183,7 +183,8 @@ router.get('/download', authenticate, RateLimitMiddleware.downloadLimiter, preve
           '-o', '-',
           '--no-warnings',
           '--geo-bypass',
-          '--force-ipv4'
+          '--force-ipv4',
+          '--extractor-args', 'youtube:player-client=ios,web_embedded'
         ];
         if (hasCookies) ytArgs.push('--cookies', cookiesPath);
         ytArgs.push(url as string);
