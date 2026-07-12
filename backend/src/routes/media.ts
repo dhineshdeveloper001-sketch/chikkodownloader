@@ -101,21 +101,36 @@ router.get('/download', authenticate, RateLimitMiddleware.downloadLimiter, preve
       if (isHighRes || ytFormat.includes('+')) {
         // High Res Zero-Disk Multiplexing Strategy using native FFmpeg Pipes
         // yt-dlp cannot concurrently stream two files to stdout, so we extract URLs and use ffmpeg
-        const gArgs = ['-f', ytFormat, '-g', '--no-warnings', '--geo-bypass', '--force-ipv4'];
-        if (hasCookies) gArgs.push('--cookies', cookiesPath);
-        gArgs.push(url as string);
+        const jArgs = ['-f', ytFormat, '-J', '--no-warnings', '--geo-bypass', '--force-ipv4'];
+        if (hasCookies) jArgs.push('--cookies', cookiesPath);
+        jArgs.push(url as string);
 
-        console.log("[Media Route] Executing yt-dlp -g command:", ytDlpCmd, gArgs.join(' '));
+        console.log("[Media Route] Executing yt-dlp -J command:", ytDlpCmd, jArgs.join(' '));
         try {
-          const { stdout: urlsStdout } = await execFileAsync(ytDlpCmd, gArgs, { timeout: 30000 });
-          const urls = urlsStdout.trim().split('\n').filter(u => u.startsWith('http'));
+          const { stdout: jsonStdout } = await execFileAsync(ytDlpCmd, jArgs, { timeout: 45000, maxBuffer: 20 * 1024 * 1024 });
+          const info = JSON.parse(jsonStdout);
           
-          if (urls.length === 0) throw new Error('No stream URLs found in yt-dlp output');
+          const requestedFormats = info.requested_formats || [info];
+          const urls = requestedFormats.map((f: any) => f.url).filter(Boolean);
+          
+          if (urls.length === 0) throw new Error('No stream URLs found in yt-dlp JSON output');
 
           const ffmpegArgs = [];
+          
+          // Extract headers from yt-dlp JSON to bypass YouTube 403 Forbidden during FFmpeg fetch
+          const headersObj = requestedFormats[0]?.http_headers || info.http_headers || {};
+          let headersString = '';
+          for (const [key, value] of Object.entries(headersObj)) {
+            headersString += `${key}: ${value}\r\n`;
+          }
+
           for (const u of urls) {
+             if (headersString) {
+               ffmpegArgs.push('-headers', headersString);
+             }
              ffmpegArgs.push('-i', u);
           }
+          
           ffmpegArgs.push(
              '-c', 'copy',
              '-movflags', 'frag_keyframe+empty_moov',
@@ -123,14 +138,22 @@ router.get('/download', authenticate, RateLimitMiddleware.downloadLimiter, preve
              'pipe:1'
           );
 
-          const ffmpegPath = require('ffmpeg-static') || 'ffmpeg';
+          // STRICTLY enforce OS-level ffmpeg in production to avoid Alpine/Slim binary crashes
+          const ffmpegPath = process.env.NODE_ENV === 'production' ? 'ffmpeg' : (require('ffmpeg-static') || 'ffmpeg');
+          
           console.log("[Media Route] Spawning ffmpeg pipeline:", ffmpegPath, ffmpegArgs.join(' '));
           const subprocess = spawn(ffmpegPath, ffmpegArgs);
+          
           subprocess.stdout.pipe(res);
+
+          // Capture FFmpeg stderr to log exactly why the multiplexing crashed
+          subprocess.stderr.on('data', (data) => {
+            console.error(`[FFmpeg STDERR]: ${data.toString()}`);
+          });
 
           subprocess.on('error', async (err: any) => {
             console.error('[Media Route] FFmpeg Spawn Error Stack Trace:', err.stack || err);
-            if (!res.headersSent) res.status(500).json({ success: false, message: 'Stream failed', error: err.message, stack: err.stack });
+            if (!res.headersSent) res.status(500).json({ success: false, stage: 'ffmpeg_spawn', message: 'Stream failed', error: err.message, stack: err.stack });
             else res.end();
             await prisma.downloadHistory.update({
               where: { id: downloadRecord.id },
@@ -138,9 +161,15 @@ router.get('/download', authenticate, RateLimitMiddleware.downloadLimiter, preve
             }).catch(console.error);
           });
           
+          subprocess.on('close', (code) => {
+             if (code !== 0) {
+               console.error(`[Media Route] FFmpeg process exited with code ${code}`);
+             }
+          });
+          
         } catch (err: any) {
-          console.error('[Media Route] yt-dlp URL Extraction Error Stack Trace:', err.stack || err);
-          if (!res.headersSent) res.status(500).json({ success: false, message: 'Stream extraction failed', error: err.message, stack: err.stack });
+          console.error('[Media Route] yt-dlp JSON Extraction Error Stack Trace:', err.stack || err);
+          if (!res.headersSent) res.status(500).json({ success: false, stage: 'ytdlp_extraction', message: 'Stream extraction failed', error: err.message, stack: err.stack });
           await prisma.downloadHistory.update({
             where: { id: downloadRecord.id },
             data: { status: 'error' }
@@ -162,14 +191,24 @@ router.get('/download', authenticate, RateLimitMiddleware.downloadLimiter, preve
         const subprocess = spawn(ytDlpCmd, ytArgs);
         subprocess.stdout.pipe(res);
 
+        subprocess.stderr.on('data', (data) => {
+          console.error(`[yt-dlp STDERR]: ${data.toString()}`);
+        });
+
         subprocess.on('error', async (err: any) => {
           console.error('[Media Route] yt-dlp Spawn Error Stack Trace:', err.stack || err);
-          if (!res.headersSent) res.status(500).json({ success: false, message: 'Stream failed', error: err.message, stack: err.stack });
+          if (!res.headersSent) res.status(500).json({ success: false, stage: 'ytdlp_spawn', message: 'Stream failed', error: err.message, stack: err.stack });
           else res.end();
           await prisma.downloadHistory.update({
             where: { id: downloadRecord.id },
             data: { status: 'error' }
           }).catch(console.error);
+        });
+
+        subprocess.on('close', (code) => {
+           if (code !== 0) {
+             console.error(`[Media Route] yt-dlp process exited with code ${code}`);
+           }
         });
       }
 
@@ -184,9 +223,9 @@ router.get('/download', authenticate, RateLimitMiddleware.downloadLimiter, preve
     }
 
   } catch (err: any) {
-    console.error('Download Handler Error:', err.message);
+    console.error('Download Handler Error:', err.stack || err.message);
     if (!res.headersSent) {
-      res.status(500).json({ success: false, message: 'Failed to initiate download stream' });
+      res.status(500).json({ success: false, stage: 'download_handler', message: 'Failed to initiate download stream', error: err.message, stack: err.stack });
     }
   }
 });

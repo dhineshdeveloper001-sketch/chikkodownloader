@@ -128,17 +128,42 @@ app.get('/api/health', async (req, res) => {
     // Check DB
     await prisma.$queryRaw`SELECT 1`;
     // Check yt-dlp
-    await execFileAsync(ytDlpCmd, ['--version']);
+    const { stdout: ytdlpVersion } = await execFileAsync(ytDlpCmd, ['--version']);
+    
+    // Check ffmpeg (Fallback strictly to OS ffmpeg)
+    const ffmpegPath = process.env.NODE_ENV === 'production' ? 'ffmpeg' : (require('ffmpeg-static') || 'ffmpeg');
+    const { stdout: ffmpegOut, stderr: ffmpegErr } = await execFileAsync(ffmpegPath, ['-version']);
+    const ffmpegVersion = ffmpegOut.split('\n')[0] || ffmpegErr.split('\n')[0];
+
+    // Check temp writability
+    const tempTestFile = path.join(process.cwd(), '.temp_write_test');
+    let tempWritable = false;
+    try {
+      fs.writeFileSync(tempTestFile, 'ok');
+      if (fs.existsSync(tempTestFile)) {
+        fs.unlinkSync(tempTestFile);
+        tempWritable = true;
+      }
+    } catch(e) {}
     
     res.json({
       status: 'ok',
       database: 'connected',
-      ytdlp: 'available'
+      ytdlp: ytdlpVersion.trim(),
+      ffmpeg: ffmpegVersion.trim(),
+      node: process.version,
+      platform: process.platform,
+      uptime: process.uptime(),
+      tempWritable
     });
   } catch (error: any) {
     res.status(500).json({
       success: false,
-      error: error.message
+      stage: 'health_check',
+      message: 'Health check failed',
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
     });
   }
 });
